@@ -676,7 +676,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 #ifdef WITH_APRILTAG_ROS
 	tagDetectionsSub_ = this->create_subscription<apriltag_ros::msg::AprilTagDetectionArray>("tag_detections", 1, std::bind(&CoreWrapper::tagDetectionsAsyncCallback, this, std::placeholders::_1));
 #endif
-	imuSub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("imu", 100, std::bind(&CoreWrapper::imuAsyncCallback, this, std::placeholders::_1));
+	imuSub_ = this->create_subscription<sensor_msgs::msg::Imu>("imu", 100, std::bind(&CoreWrapper::imuAsyncCallback, this, std::placeholders::_1));
 
 	parametersClient_ = std::make_shared<rclcpp::SyncParametersClient>(this);
 	auto on_parameter_event_callback =
