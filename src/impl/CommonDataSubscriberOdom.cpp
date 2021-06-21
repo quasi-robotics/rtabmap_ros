@@ -72,7 +72,8 @@ void CommonDataSubscriber::setupOdomCallbacks(
 		int queueSize,
 		bool approxSync)
 {
-	RCLCPP_INFO(node.get_logger(), "Setup scan callback");
+    RCLCPP_INFO(node.get_logger(), "Setup scan callback. subscribeOdomInfo: %d, subscribeUserData: %d, approxSync: %d",
+                (int)subscribeOdomInfo, (int)subscribeUserData, (int)approxSync);
 
 	if(subscribeUserData || subscribeOdomInfo)
 	{
