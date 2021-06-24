@@ -573,7 +573,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 				if(!odomFrameId_.empty())
 				{
 					mapToOdomMutex_.lock();
-					rclcpp::Time tfExpiration = now() + rclcpp::Duration(tfTolerance*10e9);
+					rclcpp::Time tfExpiration = now() + rclcpp::Duration::from_nanoseconds(tfTolerance*10e9);
 					geometry_msgs::msg::TransformStamped msg;
 					msg.child_frame_id = odomFrameId_;
 					msg.header.frame_id = mapFrameId_;
@@ -672,11 +672,15 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 
 	userDataAsyncSub_ = this->create_subscription<rtabmap_ros::msg::UserData>("user_data_async", 1, std::bind(&CoreWrapper::userDataAsyncCallback, this, std::placeholders::_1));
 	globalPoseAsyncSub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("global_pose", 1, std::bind(&CoreWrapper::globalPoseAsyncCallback, this, std::placeholders::_1));
-	gpsFixAsyncSub_ = this->create_subscription<sensor_msgs::msg::NavSatFix>("gps/fix", 1, std::bind(&CoreWrapper::gpsFixAsyncCallback, this, std::placeholders::_1));
+	gpsFixAsyncSub_ = this->create_subscription<sensor_msgs::msg::NavSatFix>("gps/fix",
+                                                                             rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data),
+                                                                             std::bind(&CoreWrapper::gpsFixAsyncCallback, this, std::placeholders::_1));
 #ifdef WITH_APRILTAG_ROS
 	tagDetectionsSub_ = this->create_subscription<apriltag_ros::msg::AprilTagDetectionArray>("tag_detections", 1, std::bind(&CoreWrapper::tagDetectionsAsyncCallback, this, std::placeholders::_1));
 #endif
-	imuSub_ = this->create_subscription<sensor_msgs::msg::Imu>("imu", 100, std::bind(&CoreWrapper::imuAsyncCallback, this, std::placeholders::_1));
+	imuSub_ = this->create_subscription<sensor_msgs::msg::Imu>("imu",
+                                                               rclcpp::QoS(rclcpp::KeepLast(100), rmw_qos_profile_sensor_data),
+                                                               std::bind(&CoreWrapper::imuAsyncCallback, this, std::placeholders::_1));
 
 	parametersClient_ = std::make_shared<rclcpp::SyncParametersClient>(this);
 	auto on_parameter_event_callback =
@@ -783,7 +787,7 @@ void CoreWrapper::defaultCallback(const sensor_msgs::msg::Image::ConstSharedPtr 
 
 		if(rate_>0.0f)
 		{
-			if(previousStamp_.seconds() > 0.0 && stamp.seconds() > previousStamp_.seconds() && stamp - previousStamp_ < rclcpp::Duration(1.0f/rate_))
+		    if(previousStamp_.seconds() > 0.0 && stamp.seconds() > previousStamp_.seconds() && stamp - previousStamp_ < rclcpp::Duration::from_nanoseconds(1.0f/rate_))
 			{
 				return;
 			}
@@ -2752,7 +2756,7 @@ void CoreWrapper::publishMapCallback(
 					marker.color.r = 1.0;
 					marker.color.g = 1.0;
 					marker.color.b = 0.0;
-					marker.lifetime = rclcpp::Duration(2.0f/rate_);
+					marker.lifetime = rclcpp::Duration::from_nanoseconds(2.0f/rate_);
 
 					marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
 					marker.text = uNumber2Str(iter->first);
@@ -2866,7 +2870,7 @@ void CoreWrapper::publishMapCallback(
 							marker.color.r = 1.0;
 							marker.color.g = 1.0;
 							marker.color.b = 1.0;
-							marker.lifetime = rclcpp::Duration(2.0f/rate_);
+							marker.lifetime = rclcpp::Duration::from_nanoseconds(2.0f/rate_);
 
 							marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
 							marker.text = uNumber2Str(iter->first);
@@ -3276,7 +3280,7 @@ void CoreWrapper::publishStats(const rclcpp::Time & stamp)
 				marker.color.r = 0.0;
 				marker.color.g = 1.0;
 				marker.color.b = 0.0;
-				marker.lifetime = rclcpp::Duration(2.0f/rate_);
+				marker.lifetime = rclcpp::Duration::from_nanoseconds(2.0f/rate_);
 
 				marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
 				marker.text = uNumber2Str(iter->first);
@@ -3357,7 +3361,7 @@ void CoreWrapper::publishStats(const rclcpp::Time & stamp)
 					marker.color.r = 1.0;
 					marker.color.g = 1.0;
 					marker.color.b = 1.0;
-					marker.lifetime = rclcpp::Duration(2.0f/rate_);
+					marker.lifetime = rclcpp::Duration::from_nanoseconds(2.0f/rate_);
 
 					marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
 					marker.text = uNumber2Str(poseIter->first);
