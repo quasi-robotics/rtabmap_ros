@@ -335,7 +335,8 @@ void CommonDataSubscriber::setupDepthCallbacks(
 		int queueSize,
 		bool approxSync)
 {
-	RCLCPP_INFO(node.get_logger(), "Setup depth callback");
+    RCLCPP_INFO(node.get_logger(), "Setup depth callback. subscribeOdom: %d, subscribeOdomInfo: %d, subscribeUserData: %d, subscribeScan2d: %d, subscribeScan3d: %d, approxSync: %d",
+                (int)subscribeOdom, (int)subscribeOdomInfo, (int)subscribeUserData, (int)subscribeScan2d, (int)subscribeScan3d, (int)approxSync);
 
 	image_transport::TransportHints hints(&node);
 	imageSub_.subscribe(&node, "rgb/image", hints.getTransport(), rmw_qos_profile_sensor_data);

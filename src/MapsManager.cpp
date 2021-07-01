@@ -119,18 +119,20 @@ void MapsManager::init(rclcpp::Node & node, const std::string & name, bool)
 #endif
 
 
+	rclcpp::QoS qos_latched(rclcpp::KeepLast(1));
+	qos_latched.transient_local();
 
 	// mapping topics
 	latched_.clear();
-	gridMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("map", 1); // FIXME latching option in ROS2?
+	gridMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("map", qos_latched);
 	latched_.insert(std::make_pair((void*)&gridMapPub_, false));
-	gridProbMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("grid_prob_map", 1); // FIXME latching option in ROS2?
+	gridProbMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("grid_prob_map", qos_latched);
 	latched_.insert(std::make_pair((void*)&gridProbMapPub_, false));
-	cloudMapPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_map", 1); // FIXME latching option in ROS2?
+	cloudMapPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_map", qos_latched);
 	latched_.insert(std::make_pair((void*)&cloudMapPub_, false));
-	cloudObstaclesPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_obstacles", 1); // FIXME latching option in ROS2?
+	cloudObstaclesPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_obstacles", qos_latched);
 	latched_.insert(std::make_pair((void*)&cloudObstaclesPub_, false));
-	cloudGroundPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_ground", 1); // FIXME latching option in ROS2?
+	cloudGroundPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_ground", qos_latched);
 	latched_.insert(std::make_pair((void*)&cloudGroundPub_, false));
 
 #ifdef WITH_OCTOMAP_MSGS
@@ -141,17 +143,17 @@ void MapsManager::init(rclcpp::Node & node, const std::string & name, bool)
 	latched_.insert(std::make_pair((void*)&octoMapPubFull_, false));
 #endif
 #endif
-	octoMapCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_occupied_space", 1); // FIXME latching option in ROS2?
+	octoMapCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_occupied_space", qos_latched);
 	latched_.insert(std::make_pair((void*)&octoMapCloud_, false));
-	octoMapFrontierCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_global_frontier_space", 1); // FIXME latching option in ROS2?
+	octoMapFrontierCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_global_frontier_space", qos_latched);
 	latched_.insert(std::make_pair((void*)&octoMapFrontierCloud_, false));
-	octoMapObstacleCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_obstacles", 1); // FIXME latching option in ROS2?
+	octoMapObstacleCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_obstacles", qos_latched);
 	latched_.insert(std::make_pair((void*)&octoMapObstacleCloud_, false));
-	octoMapGroundCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_ground", 1); // FIXME latching option in ROS2?
+	octoMapGroundCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_ground", qos_latched);
 	latched_.insert(std::make_pair((void*)&octoMapGroundCloud_, false));
-	octoMapEmptySpace_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_empty_space", 1); // FIXME latching option in ROS2?
+	octoMapEmptySpace_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_empty_space", qos_latched);
 	latched_.insert(std::make_pair((void*)&octoMapEmptySpace_, false));
-	octoMapProj_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("octomap_grid", 1); // FIXME latching option in ROS2?
+	octoMapProj_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("octomap_grid", qos_latched);
 	latched_.insert(std::make_pair((void*)&octoMapProj_, false));
 }
 
@@ -187,7 +189,7 @@ void parameterMoved(
 					 "rtabmap_ros to rtabmap library. Use "
 					 "parameter \"%s\" instead. The value \"\" is still "
 					 "copied to new parameter name.",
-					 rosName.c_str(),
+//					 rosName.c_str(),
 					 parameterName.c_str(),
 					 p.value_to_string().c_str());
 			parameters.insert(ParametersPair(parameterName, p.value_to_string()));
