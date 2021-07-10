@@ -191,4 +191,3 @@ void PreferencesDialogROS::writeCoreSettings(const QString & filePath) const
 		}
 	}
 }
-
