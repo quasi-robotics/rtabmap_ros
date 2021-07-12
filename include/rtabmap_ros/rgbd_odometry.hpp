@@ -34,8 +34,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 
-#include <image_transport/image_transport.h>
-#include <image_transport/subscriber_filter.h>
+#include <image_transport/image_transport.hpp>
+#include <image_transport/subscriber_filter.hpp>
 
 #include <sensor_msgs/msg/image.hpp>
 #include <rtabmap_ros/msg/rgbd_image.hpp>
@@ -114,7 +114,6 @@ private:
 	message_filters::Synchronizer<MyApproxSync4Policy> * approxSync4_;
 	typedef message_filters::sync_policies::ExactTime<rtabmap_ros::msg::RGBDImage, rtabmap_ros::msg::RGBDImage, rtabmap_ros::msg::RGBDImage, rtabmap_ros::msg::RGBDImage> MyExactSync4Policy;
 	message_filters::Synchronizer<MyExactSync4Policy> * exactSync4_;
-	int queueSize_;
 };
 
 }
