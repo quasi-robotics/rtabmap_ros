@@ -130,7 +130,7 @@ PointCloudXYZRGB::PointCloudXYZRGB(const rclcpp::NodeOptions & options) :
 
 	cloudPub_ = create_publisher<sensor_msgs::msg::PointCloud2>("cloud", 1);
 
-	rgbdImageSub_ = create_subscription<rtabmap_ros::msg::RGBDImage>("rgbd_image", rclcpp::SensorDataQoS(), std::bind(&PointCloudXYZRGB::rgbdImageCallback, this, std::placeholders::_1));
+	rgbdImageSub_ = create_subscription<rtabmap_ros::msg::RGBDImage>("rgbd_image", 5, std::bind(&PointCloudXYZRGB::rgbdImageCallback, this, std::placeholders::_1));
 
 	if(approxSync)
 	{
@@ -157,16 +157,16 @@ PointCloudXYZRGB::PointCloudXYZRGB(const rclcpp::NodeOptions & options) :
 	}
 
 	image_transport::TransportHints hints(this);
-	imageSub_.subscribe(this, "rgb/image", hints.getTransport(), rmw_qos_profile_sensor_data);
-	imageDepthSub_.subscribe(this, "depth/image", hints.getTransport(), rmw_qos_profile_sensor_data);
-	cameraInfoSub_.subscribe(this, "rgb/camera_info", rmw_qos_profile_sensor_data);
+	imageSub_.subscribe(this, "rgb/image", hints.getTransport());
+	imageDepthSub_.subscribe(this, "depth/image", hints.getTransport());
+	cameraInfoSub_.subscribe(this, "rgb/camera_info");
 
-	imageDisparitySub_.subscribe(this, "disparity", rmw_qos_profile_sensor_data);
+	imageDisparitySub_.subscribe(this, "disparity");
 
-	imageLeft_.subscribe(this, "left/image", hints.getTransport(), rmw_qos_profile_sensor_data);
-	imageRight_.subscribe(this, "right/image", hints.getTransport(), rmw_qos_profile_sensor_data);
-	cameraInfoLeft_.subscribe(this, "left/camera_info", rmw_qos_profile_sensor_data);
-	cameraInfoRight_.subscribe(this, "right/camera_info", rmw_qos_profile_sensor_data);
+	imageLeft_.subscribe(this, "left/image", hints.getTransport());
+	imageRight_.subscribe(this, "right/image", hints.getTransport());
+	cameraInfoLeft_.subscribe(this, "left/camera_info");
+	cameraInfoRight_.subscribe(this, "right/camera_info");
 }
 
 PointCloudXYZRGB::~PointCloudXYZRGB()
@@ -323,13 +323,17 @@ void PointCloudXYZRGB::stereoCallback(
 	if(!(imageLeft->encoding.compare(sensor_msgs::image_encodings::MONO8) == 0 ||
 			imageLeft->encoding.compare(sensor_msgs::image_encodings::MONO16) == 0 ||
 			imageLeft->encoding.compare(sensor_msgs::image_encodings::BGR8) == 0 ||
-			imageLeft->encoding.compare(sensor_msgs::image_encodings::RGB8) == 0) ||
+			imageLeft->encoding.compare(sensor_msgs::image_encodings::RGB8) == 0 ||
+			imageLeft->encoding.compare(sensor_msgs::image_encodings::RGBA8) == 0 ||
+			imageLeft->encoding.compare(sensor_msgs::image_encodings::BGRA8) == 0) ||
 		!(imageRight->encoding.compare(sensor_msgs::image_encodings::MONO8) == 0 ||
 			imageRight->encoding.compare(sensor_msgs::image_encodings::MONO16) == 0 ||
 			imageRight->encoding.compare(sensor_msgs::image_encodings::BGR8) == 0 ||
-			imageRight->encoding.compare(sensor_msgs::image_encodings::RGB8) == 0))
+			imageRight->encoding.compare(sensor_msgs::image_encodings::RGB8) == 0 ||
+			imageRight->encoding.compare(sensor_msgs::image_encodings::RGBA8) == 0 ||
+			imageRight->encoding.compare(sensor_msgs::image_encodings::BGRA8) == 0))
 	{
-		RCLCPP_ERROR(this->get_logger(), "Input type must be image=mono8,mono16,rgb8,bgr8 (enc=%s)", imageLeft->encoding.c_str());
+		RCLCPP_ERROR(this->get_logger(), "Input type must be image=mono8,mono16,rgb8,bgr8,rgba8,bgra8 (enc=%s)", imageLeft->encoding.c_str());
 		return;
 	}
 
@@ -407,10 +411,11 @@ void PointCloudXYZRGB::processAndPublish(
 	if(indices->size() && voxelSize_ > 0.0)
 	{
 		pclCloud = rtabmap::util3d::voxelize(pclCloud, indices, voxelSize_);
+		pclCloud->is_dense = true;
 	}
 
 	// Do radius filtering after voxel filtering ( a lot faster)
-	if(pclCloud->size() && noiseFilterRadius_ > 0.0 && noiseFilterMinNeighbors_ > 0)
+	if(!pclCloud->empty() && (pclCloud->is_dense || !indices->empty()) && noiseFilterRadius_ > 0.0 && noiseFilterMinNeighbors_ > 0)
 	{
 		if(pclCloud->is_dense)
 		{
@@ -426,7 +431,7 @@ void PointCloudXYZRGB::processAndPublish(
 	}
 
 	sensor_msgs::msg::PointCloud2::UniquePtr rosCloud(new sensor_msgs::msg::PointCloud2);
-	if(pclCloud->size() && (normalK_ > 0 || normalRadius_ > 0.0f))
+	if(!pclCloud->empty() && (pclCloud->is_dense || !indices->empty()) && (normalK_ > 0 || normalRadius_ > 0.0f))
 	{
 		//compute normals
 		pcl::PointCloud<pcl::Normal>::Ptr normals = rtabmap::util3d::computeNormals(pclCloud, normalK_, normalRadius_);

@@ -1,3 +1,9 @@
+#
+# To avoid log buffering:
+# "stdbuf -o L ros2 launch rtabmap_ros rtabmap.launch.py ..."
+#
+
+import os
 
 from launch import LaunchDescription, Substitution, LaunchContext
 from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, LogInfo, OpaqueFunction
@@ -6,6 +12,7 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 from launch_ros.actions import SetParameter
 from typing import Text
+from ament_index_python.packages import get_package_share_directory
 
 #Based on https://answers.ros.org/question/363763/ros2-how-best-to-conditionally-include-a-prefix-in-a-launchpy-file/
 class ConditionalText(Substitution):
@@ -37,6 +44,7 @@ def launch_setup(context, *args, **kwargs):
     return [
         DeclareLaunchArgument('depth', default_value=ConditionalText('false', 'true', IfCondition(PythonExpression(["'", LaunchConfiguration('stereo'), "' == 'true'"]))._predicate_func(context)), description=''),
         DeclareLaunchArgument('subscribe_rgb', default_value=LaunchConfiguration('depth'), description=''),
+        DeclareLaunchArgument('args',  default_value=LaunchConfiguration('rtabmap_args'), description='Can be used to pass RTAB-Map\'s parameters or other flags like --udebug and --delete_db_on_start/-d'),
         
         #These arguments should not be modified directly, see referred topics without "_relay" suffix above
         DeclareLaunchArgument('rgb_topic_relay',      default_value=ConditionalText(''.join([LaunchConfiguration('rgb_topic').perform(context), "_relay"]), ''.join(LaunchConfiguration('rgb_topic').perform(context)), LaunchConfiguration('compressed').perform(context)), description='Should not be modified manually!'),
@@ -137,7 +145,7 @@ def launch_setup(context, *args, **kwargs):
                 "publish_tf": LaunchConfiguration('publish_tf_odom'),
                 "ground_truth_frame_id": LaunchConfiguration('ground_truth_frame_id'),
                 "ground_truth_base_frame_id": LaunchConfiguration('ground_truth_base_frame_id'),
-                "wait_for_transform_duration": LaunchConfiguration('wait_for_transform'),
+                "wait_for_transform": LaunchConfiguration('wait_for_transform'),
                 "wait_imu_to_init": LaunchConfiguration('wait_imu_to_init'),
                 "approx_sync": LaunchConfiguration('approx_sync'),
                 "config_path": LaunchConfiguration('cfg'),
@@ -167,7 +175,7 @@ def launch_setup(context, *args, **kwargs):
                 "publish_tf": LaunchConfiguration('publish_tf_odom'),
                 "ground_truth_frame_id": LaunchConfiguration('ground_truth_frame_id'),
                 "ground_truth_base_frame_id": LaunchConfiguration('ground_truth_base_frame_id'),
-                "wait_for_transform_duration": LaunchConfiguration('wait_for_transform'),
+                "wait_for_transform": LaunchConfiguration('wait_for_transform'),
                 "wait_imu_to_init": LaunchConfiguration('wait_imu_to_init'),
                 "approx_sync": LaunchConfiguration('approx_sync'),
                 "config_path": LaunchConfiguration('cfg'),
@@ -198,7 +206,7 @@ def launch_setup(context, *args, **kwargs):
                 "publish_tf": LaunchConfiguration('publish_tf_odom'),
                 "ground_truth_frame_id": LaunchConfiguration('ground_truth_frame_id'),
                 "ground_truth_base_frame_id": LaunchConfiguration('ground_truth_base_frame_id'),
-                "wait_for_transform_duration": LaunchConfiguration('wait_for_transform'),
+                "wait_for_transform": LaunchConfiguration('wait_for_transform'),
                 "wait_imu_to_init": LaunchConfiguration('wait_imu_to_init'),
                 "approx_sync": LaunchConfiguration('approx_sync'),
                 "config_path": LaunchConfiguration('cfg'),
@@ -235,7 +243,7 @@ def launch_setup(context, *args, **kwargs):
                 "odom_tf_angular_variance": LaunchConfiguration('odom_tf_angular_variance'),
                 "odom_tf_linear_variance": LaunchConfiguration('odom_tf_linear_variance'),
                 "odom_sensor_sync": LaunchConfiguration('odom_sensor_sync'),
-                "wait_for_transform_duration": LaunchConfiguration('wait_for_transform'),
+                "wait_for_transform": LaunchConfiguration('wait_for_transform'),
                 "database_path": LaunchConfiguration('database_path'),
                 "approx_sync": LaunchConfiguration('approx_sync'),
                 "config_path": LaunchConfiguration('cfg'),
@@ -280,7 +288,7 @@ def launch_setup(context, *args, **kwargs):
                 "subscribe_odom_info": ConditionalBool(True, False, IfCondition(PythonExpression(["'", LaunchConfiguration('icp_odometry'), "' == 'true' or '", LaunchConfiguration('visual_odometry'), "' == 'true'"]))._predicate_func(context)).perform(context),
                 "frame_id": LaunchConfiguration('frame_id'),
                 "odom_frame_id": LaunchConfiguration('odom_frame_id'),
-                "wait_for_transform_duration": LaunchConfiguration('wait_for_transform'),
+                "wait_for_transform": LaunchConfiguration('wait_for_transform'),
                 "approx_sync": LaunchConfiguration('approx_sync'),
                 "queue_size": LaunchConfiguration('queue_size')
             }],
@@ -299,9 +307,37 @@ def launch_setup(context, *args, **kwargs):
             condition=IfCondition(LaunchConfiguration("rtabmapviz")),
             arguments=[LaunchConfiguration("gui_cfg")],
             prefix=LaunchConfiguration('launch_prefix'),
-            namespace=LaunchConfiguration('namespace'))]
+            namespace=LaunchConfiguration('namespace')),
+        Node(
+            package='rviz2', executable='rviz2', output='screen',
+            condition=IfCondition(LaunchConfiguration("rviz")),
+            arguments=[["-d"], [LaunchConfiguration("rviz_cfg")]]),
+        Node(
+            package='rtabmap_ros', executable='point_cloud_xyzrgb', output='screen',
+            condition=IfCondition(LaunchConfiguration("rviz")),
+            parameters=[{
+                "decimation": 4,
+                "voxel_size": 0.0,
+                "approx_sync": LaunchConfiguration('approx_sync')
+            }],
+            remappings=[
+                ('left/image', LaunchConfiguration('left_image_topic_relay')),
+                ('right/image', LaunchConfiguration('right_image_topic_relay')),
+                ('left/camera_info', LaunchConfiguration('left_camera_info_topic')),
+                ('right/camera_info', LaunchConfiguration('right_camera_info_topic')),
+                ('rgb/image', LaunchConfiguration('rgb_topic_relay')),
+                ('depth/image', LaunchConfiguration('depth_topic_relay')),
+                ('rgb/camera_info', LaunchConfiguration('camera_info_topic')),
+                ('rgbd_image', LaunchConfiguration('rgbd_topic_relay')),
+                ('cloud', 'voxel_cloud')]),
+        ]
 
 def generate_launch_description():
+    
+    config_rviz = os.path.join(
+        get_package_share_directory('rtabmap_ros'), 'launch', 'config', 'rgbd.rviz'
+    )
+    
     return LaunchDescription([
         
         # Arguments
@@ -309,13 +345,15 @@ def generate_launch_description():
 
         DeclareLaunchArgument('localization', default_value='false', description='Launch in localization mode.'),
         DeclareLaunchArgument('rtabmapviz',   default_value='true',  description='Launch RTAB-Map UI (optional).'),
-        
+        DeclareLaunchArgument('rviz',         default_value='false', description='Launch RVIZ (optional).'),
+
         DeclareLaunchArgument('use_sim_time', default_value='false', description='Use simulation (Gazebo) clock if true'),
-        
+
         # Config files
-        DeclareLaunchArgument('cfg',     default_value='',                        description='To change RTAB-Map\'s parameters, set the path of config file (*.ini) generated by the standalone app.'),
-        DeclareLaunchArgument('gui_cfg', default_value='~/.ros/rtabmap_gui.ini',  description='Configuration path of rtabmapviz.'),
-        
+        DeclareLaunchArgument('cfg',      default_value='',                        description='To change RTAB-Map\'s parameters, set the path of config file (*.ini) generated by the standalone app.'),
+        DeclareLaunchArgument('gui_cfg',  default_value='~/.ros/rtabmap_gui.ini',  description='Configuration path of rtabmapviz.'),
+        DeclareLaunchArgument('rviz_cfg', default_value=config_rviz,               description='Configuration path of rviz2.'),
+
         DeclareLaunchArgument('frame_id',       default_value='base_link',          description='Fixed frame id of the robot (base frame), you may set "base_link" or "base_footprint" if they are published. For camera-only config, this could be "camera_link".'),
         DeclareLaunchArgument('odom_frame_id',  default_value='',                   description='If set, TF is used to get odometry instead of the topic.'),
         DeclareLaunchArgument('map_frame_id',   default_value='map',                description='Output map frame id (TF).'),
@@ -324,7 +362,7 @@ def generate_launch_description():
         DeclareLaunchArgument('database_path',  default_value='~/.ros/rtabmap.db',  description='Where is the map saved/loaded.'),
         DeclareLaunchArgument('queue_size',     default_value='10',                 description=''),
         DeclareLaunchArgument('wait_for_transform', default_value='0.2',            description=''),
-        DeclareLaunchArgument('args',           default_value='',                   description='Can be used to pass RTAB-Map\'s parameters or other flags like --udebug and --delete_db_on_start/-d'),
+        DeclareLaunchArgument('rtabmap_args',   default_value='',                   description='Backward compatibility, use "args" instead.'),
         DeclareLaunchArgument('launch_prefix',  default_value='',                   description='For debugging purpose, it fills prefix tag of the nodes, e.g., "xterm -e gdb -ex run --args"'),
         DeclareLaunchArgument('output',         default_value='screen',             description='Control node output (screen or log).'),
         
@@ -370,8 +408,8 @@ def generate_launch_description():
         DeclareLaunchArgument('odom_topic',                 default_value='odom',  description='Odometry topic name.'),
         DeclareLaunchArgument('vo_frame_id',                default_value=LaunchConfiguration('odom_topic'), description='Visual/Icp odometry frame ID for TF.'),
         DeclareLaunchArgument('publish_tf_odom',            default_value='true',  description=''),
-        DeclareLaunchArgument('odom_tf_angular_variance',   default_value='1.0',   description='If TF is used to get odometry, this is the default angular variance'),
-        DeclareLaunchArgument('odom_tf_linear_variance',    default_value='1.0',   description='If TF is used to get odometry, this is the default linear variance'),
+        DeclareLaunchArgument('odom_tf_angular_variance',   default_value='0.01',    description='If TF is used to get odometry, this is the default angular variance'),
+        DeclareLaunchArgument('odom_tf_linear_variance',    default_value='0.001',   description='If TF is used to get odometry, this is the default linear variance'),
         DeclareLaunchArgument('odom_args',                  default_value='',      description='More arguments for odometry (overwrite same parameters in rtabmap_args).'),
         DeclareLaunchArgument('odom_sensor_sync',           default_value='false', description=''),
         DeclareLaunchArgument('odom_guess_frame_id',        default_value='',      description=''),
