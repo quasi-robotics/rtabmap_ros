@@ -554,17 +554,17 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 	{
 		rgbdSubs_.resize(1);
 		rgbdSubs_[0] = new message_filters::Subscriber<rtabmap_ros::msg::RGBDImage>;
-		rgbdSubs_[0]->subscribe(&node, "rgbd_image");
+		rgbdSubs_[0]->subscribe(&node, "rgbd_image", rmw_qos_profile_sensor_data);
 
 #ifdef RTABMAP_SYNC_USER_DATA
 		if(subscribeOdom && subscribeUserData)
 		{
-			odomSub_.subscribe(&node, "odom");
-			userDataSub_.subscribe(&node, "user_data");
+			odomSub_.subscribe(&node, "odom", rmw_qos_profile_sensor_data);
+			userDataSub_.subscribe(&node, "user_data", rmw_qos_profile_sensor_data);
 			if(subscribeScanDesc)
 			{
 				subscribedToScanDescriptor_ = true;
-				scanDescSub_.subscribe(&node, "scan_descriptor");
+				scanDescSub_.subscribe(&node, "scan_descriptor", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -575,7 +575,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeScan2d)
 			{
 				subscribedToScan2d_ = true;
-				scanSub_.subscribe(&node, "scan");
+				scanSub_.subscribe(&node, "scan", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -586,7 +586,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeScan3d)
 			{
 				subscribedToScan3d_ = true;
-				scan3dSub_.subscribe(&node, "scan_cloud");
+				scan3dSub_.subscribe(&node, "scan_cloud", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -597,7 +597,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeOdomInfo)
 			{
 				subscribedToOdomInfo_ = true;
-				odomInfoSub_.subscribe(&node, "odom_info");
+				odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 				SYNC_DECL4(CommonDataSubscriber, rgbdOdomDataInfo, approxSync, queueSize, odomSub_, userDataSub_, (*rgbdSubs_[0]), odomInfoSub_);
 			}
 			else
@@ -609,11 +609,11 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 #endif			
 		if(subscribeOdom)
 		{
-			odomSub_.subscribe(&node, "odom");
+			odomSub_.subscribe(&node, "odom", rmw_qos_profile_sensor_data);
 			if(subscribeScanDesc)
 			{
 				subscribedToScanDescriptor_ = true;
-				scanDescSub_.subscribe(&node, "scan_descriptor");
+				scanDescSub_.subscribe(&node, "scan_descriptor", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -624,7 +624,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeScan2d)
 			{
 				subscribedToScan2d_ = true;
-				scanSub_.subscribe(&node, "scan");
+				scanSub_.subscribe(&node, "scan", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -635,7 +635,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeScan3d)
 			{
 				subscribedToScan3d_ = true;
-				scan3dSub_.subscribe(&node, "scan_cloud");
+				scan3dSub_.subscribe(&node, "scan_cloud", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -646,7 +646,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeOdomInfo)
 			{
 				subscribedToOdomInfo_ = true;
-				odomInfoSub_.subscribe(&node, "odom_info");
+				odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 				SYNC_DECL3(CommonDataSubscriber, rgbdOdomInfo, approxSync, queueSize, odomSub_, (*rgbdSubs_[0]), odomInfoSub_);
 			}
 			else
@@ -657,11 +657,11 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 #ifdef RTABMAP_SYNC_USER_DATA
 		else if(subscribeUserData)
 		{
-			userDataSub_.subscribe(&node, "user_data");
+			userDataSub_.subscribe(&node, "user_data", rmw_qos_profile_sensor_data);
 			if(subscribeScanDesc)
 			{
 				subscribedToScanDescriptor_ = true;
-				scanDescSub_.subscribe(&node, "scan_descriptor");
+				scanDescSub_.subscribe(&node, "scan_descriptor", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -672,7 +672,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeScan2d)
 			{
 				subscribedToScan2d_ = true;
-				scanSub_.subscribe(&node, "scan");
+				scanSub_.subscribe(&node, "scan", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -683,7 +683,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeScan3d)
 			{
 				subscribedToScan3d_ = true;
-				scan3dSub_.subscribe(&node, "scan_cloud");
+				scan3dSub_.subscribe(&node, "scan_cloud", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -694,7 +694,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeOdomInfo)
 			{
 				subscribedToOdomInfo_ = true;
-				odomInfoSub_.subscribe(&node, "odom_info");
+				odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 				SYNC_DECL3(CommonDataSubscriber, rgbdDataInfo, approxSync, queueSize, userDataSub_, (*rgbdSubs_[0]), odomInfoSub_);
 			}
 			else
@@ -708,7 +708,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			if(subscribeScanDesc)
 			{
 				subscribedToScanDescriptor_ = true;
-				scanDescSub_.subscribe(&node, "scan_descriptor");
+				scanDescSub_.subscribe(&node, "scan_descriptor", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -719,7 +719,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeScan2d)
 			{
 				subscribedToScan2d_ = true;
-				scanSub_.subscribe(&node, "scan");
+				scanSub_.subscribe(&node, "scan", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -730,7 +730,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeScan3d)
 			{
 				subscribedToScan3d_ = true;
-				scan3dSub_.subscribe(&node, "scan_cloud");
+				scan3dSub_.subscribe(&node, "scan_cloud", rmw_qos_profile_sensor_data);
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = false;
@@ -741,7 +741,7 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 			else if(subscribeOdomInfo)
 			{
 				subscribedToOdomInfo_ = true;
-				odomInfoSub_.subscribe(&node, "odom_info");
+				odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 				SYNC_DECL2(CommonDataSubscriber, rgbdInfo, approxSync, queueSize, (*rgbdSubs_[0]), odomInfoSub_);
 			}
 			else
@@ -752,7 +752,9 @@ void CommonDataSubscriber::setupRGBDCallbacks(
 	}
 	else
 	{
-		rgbdSub_ = node.create_subscription<rtabmap_ros::msg::RGBDImage>("rgbd_image", 5, std::bind(&CommonDataSubscriber::rgbdCallback, this, std::placeholders::_1));
+		rgbdSub_ = node.create_subscription<rtabmap_ros::msg::RGBDImage>("rgbd_image",
+                                                                     rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data),rmw_qos_profile_sensor_data),
+                                                                     std::bind(&CommonDataSubscriber::rgbdCallback, this, std::placeholders::_1));
 
 		subscribedTopicsMsg_ =
 				uFormat("\n%s subscribed to:\n   %s",

@@ -99,19 +99,19 @@ void CommonDataSubscriber::setupStereoCallbacks(
 	RCLCPP_INFO(node.get_logger(), "Setup stereo callback");
 
 	image_transport::TransportHints hints(&node);
-	imageRectLeft_.subscribe(&node, "left/image_rect", hints.getTransport());
-	imageRectRight_.subscribe(&node, "right/image_rect", hints.getTransport());
-	cameraInfoLeft_.subscribe(&node, "left/camera_info");
-	cameraInfoRight_.subscribe(&node, "right/camera_info");
+	imageRectLeft_.subscribe(&node, "left/image_rect", hints.getTransport(), rmw_qos_profile_sensor_data);
+	imageRectRight_.subscribe(&node, "right/image_rect", hints.getTransport(), rmw_qos_profile_sensor_data);
+	cameraInfoLeft_.subscribe(&node, "left/camera_info", rmw_qos_profile_sensor_data);
+	cameraInfoRight_.subscribe(&node, "right/camera_info", rmw_qos_profile_sensor_data);
 
 	if(subscribeOdom)
 	{
-		odomSub_.subscribe(&node, "odom");
+		odomSub_.subscribe(&node, "odom", rmw_qos_profile_sensor_data);
 
 		if(subscribeOdomInfo)
 		{
 			subscribedToOdomInfo_ = true;
-			odomInfoSub_.subscribe(&node, "odom_info");
+			odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 			SYNC_DECL6(CommonDataSubscriber, stereoOdomInfo, approxSync, queueSize, odomSub_, imageRectLeft_, imageRectRight_, cameraInfoLeft_, cameraInfoRight_, odomInfoSub_);
 		}
 		else
@@ -124,7 +124,7 @@ void CommonDataSubscriber::setupStereoCallbacks(
 		if(subscribeOdomInfo)
 		{
 			subscribedToOdomInfo_ = true;
-			odomInfoSub_.subscribe(&node, "odom_info");
+			odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 			SYNC_DECL5(CommonDataSubscriber, stereoInfo, approxSync, queueSize, imageRectLeft_, imageRectRight_, cameraInfoLeft_, cameraInfoRight_, odomInfoSub_);
 		}
 		else

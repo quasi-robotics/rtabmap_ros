@@ -285,31 +285,31 @@ void CommonDataSubscriber::setupScanCallbacks(
 		if(scanDescTopic)
 		{
 			subscribedToScanDescriptor_ = true;
-			scanDescSub_.subscribe(&node, "scan_descriptor");
+			scanDescSub_.subscribe(&node, "scan_descriptor", rmw_qos_profile_sensor_data);
 		}
 		else if(scan2dTopic)
 		{
 			subscribedToScan2d_ = true;
-			scanSub_.subscribe(&node, "scan");
+			scanSub_.subscribe(&node, "scan", rmw_qos_profile_sensor_data);
 		}
 		else
 		{
 			subscribedToScan3d_ = true;
-			scan3dSub_.subscribe(&node, "scan_cloud");
+			scan3dSub_.subscribe(&node, "scan_cloud", rmw_qos_profile_sensor_data);
 		}
 
 #ifdef RTABMAP_SYNC_USER_DATA
 		if(subscribeOdom && subscribeUserData)
 		{
-			odomSub_.subscribe(&node, "odom");
-			userDataSub_.subscribe(&node, "user_data");
+			odomSub_.subscribe(&node, "odom", rmw_qos_profile_sensor_data);
+			userDataSub_.subscribe(&node, "user_data", rmw_qos_profile_sensor_data);
 
 			if(scanDescTopic)
 			{
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = true;
-					odomInfoSub_.subscribe(&node, "odom_info");
+					odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 					SYNC_DECL4(CommonDataSubscriber, odomDataScanDescInfo, approxSync, queueSize, odomSub_, userDataSub_, scanDescSub_, odomInfoSub_);
 				}
 				else
@@ -322,7 +322,7 @@ void CommonDataSubscriber::setupScanCallbacks(
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = true;
-					odomInfoSub_.subscribe(&node, "odom_info");
+					odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 					SYNC_DECL4(CommonDataSubscriber, odomDataScan2dInfo, approxSync, queueSize, odomSub_, userDataSub_, scanSub_, odomInfoSub_);
 				}
 				else
@@ -335,7 +335,7 @@ void CommonDataSubscriber::setupScanCallbacks(
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = true;
-					odomInfoSub_.subscribe(&node, "odom_info");
+					odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 					SYNC_DECL4(CommonDataSubscriber, odomDataScan3dInfo, approxSync, queueSize, odomSub_, userDataSub_, scan3dSub_, odomInfoSub_);
 				}
 				else
@@ -348,14 +348,14 @@ void CommonDataSubscriber::setupScanCallbacks(
 #endif			
 		if(subscribeOdom)
 		{
-			odomSub_.subscribe(&node, "odom");
+			odomSub_.subscribe(&node, "odom", rmw_qos_profile_sensor_data);
 
 			if(scanDescTopic)
 			{
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = true;
-					odomInfoSub_.subscribe(&node, "odom_info");
+					odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 					SYNC_DECL3(CommonDataSubscriber, odomScanDescInfo, approxSync, queueSize, odomSub_, scanDescSub_, odomInfoSub_);
 				}
 				else
@@ -368,7 +368,7 @@ void CommonDataSubscriber::setupScanCallbacks(
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = true;
-					odomInfoSub_.subscribe(&node, "odom_info");
+					odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 					SYNC_DECL3(CommonDataSubscriber, odomScan2dInfo, approxSync, queueSize, odomSub_, scanSub_, odomInfoSub_);
 				}
 				else
@@ -381,7 +381,7 @@ void CommonDataSubscriber::setupScanCallbacks(
 				if(subscribeOdomInfo)
 				{
 					subscribedToOdomInfo_ = true;
-					odomInfoSub_.subscribe(&node, "odom_info");
+					odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 					SYNC_DECL3(CommonDataSubscriber, odomScan3dInfo, approxSync, queueSize, odomSub_, scan3dSub_, odomInfoSub_);
 				}
 				else
@@ -439,7 +439,7 @@ void CommonDataSubscriber::setupScanCallbacks(
 		else if(subscribeOdomInfo)
 		{
 			subscribedToOdomInfo_ = true;
-			odomInfoSub_.subscribe(&node, "odom_info");
+			odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
 			if(scanDescTopic)
 			{
 				SYNC_DECL2(CommonDataSubscriber, scanDescInfo, approxSync, queueSize, scanDescSub_, odomInfoSub_);
@@ -459,7 +459,9 @@ void CommonDataSubscriber::setupScanCallbacks(
 		if(scanDescTopic)
 		{
 			subscribedToScanDescriptor_ = true;
-			scanDescSubOnly_ = node.create_subscription<rtabmap_ros::msg::ScanDescriptor>("scan_descriptor", 5,  std::bind(&CommonDataSubscriber::scanDescCallback, this, std::placeholders::_1));
+			scanDescSubOnly_ = node.create_subscription<rtabmap_ros::msg::ScanDescriptor>("scan_descriptor",
+                                                                                    rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data),rmw_qos_profile_sensor_data),
+                                                                                    std::bind(&CommonDataSubscriber::scanDescCallback, this, std::placeholders::_1));
 			subscribedTopicsMsg_ =
 					uFormat("\n%s subscribed to:\n   %s",
 					node.get_name(),
@@ -468,7 +470,9 @@ void CommonDataSubscriber::setupScanCallbacks(
 		else if(scan2dTopic)
 		{
 			subscribedToScan2d_ = true;
-			scan2dSubOnly_ = node.create_subscription<sensor_msgs::msg::LaserScan>("scan", 5, std::bind(&CommonDataSubscriber::scan2dCallback, this, std::placeholders::_1));
+			scan2dSubOnly_ = node.create_subscription<sensor_msgs::msg::LaserScan>("scan",
+                                                                             rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data),rmw_qos_profile_sensor_data),
+                                                                             std::bind(&CommonDataSubscriber::scan2dCallback, this, std::placeholders::_1));
 			subscribedTopicsMsg_ =
 					uFormat("\n%s subscribed to:\n   %s",
 					node.get_name(),
@@ -477,7 +481,9 @@ void CommonDataSubscriber::setupScanCallbacks(
 		else
 		{
 			subscribedToScan3d_ = true;
-			scan3dSubOnly_ = node.create_subscription<sensor_msgs::msg::PointCloud2>("scan_cloud", 5, std::bind(&CommonDataSubscriber::scan3dCallback, this, std::placeholders::_1));
+			scan3dSubOnly_ = node.create_subscription<sensor_msgs::msg::PointCloud2>("scan_cloud",
+                                                                               rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data),rmw_qos_profile_sensor_data),
+                                                                               std::bind(&CommonDataSubscriber::scan3dCallback, this, std::placeholders::_1));
 			subscribedTopicsMsg_ =
 					uFormat("\n%s subscribed to:\n   %s",
 					node.get_name(),
