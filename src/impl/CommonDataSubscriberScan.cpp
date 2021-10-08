@@ -281,8 +281,8 @@ void CommonDataSubscriber::setupScanCallbacks(
 		int queueSize,
 		bool approxSync)
 {
-    RCLCPP_INFO(node.get_logger(), "Setup scan callback. subscribeOdom: %d, subscribeOdomInfo: %d, subscribeUserData: %d, approxSync: %d",
-                (int)subscribeOdom, (int)subscribeOdomInfo, (int)subscribeUserData, (int)approxSync);
+    RCLCPP_INFO(node.get_logger(), "Setup scan callback. subscribeOdom: %d, subscribeOdomInfo: %d, approxSync: %d",
+                (int)subscribeOdom, (int)subscribeOdomInfo, (int)approxSync);
 
 	if(subscribeOdom ||
 #ifdef RTABMAP_SYNC_USER_DATA
