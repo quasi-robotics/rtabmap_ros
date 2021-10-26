@@ -52,7 +52,7 @@ find_package(image_geometry REQUIRED)
 find_package(octomap_msgs)
 #find_package(apriltag_msgs)
 #find_package(find_object_2d)
-find_package(move_base_msgs)
+#find_package(move_base_msgs)
 
 ## System dependencies are found with CMake's conventions
 find_package(RTABMap 0.20.14 REQUIRED)
