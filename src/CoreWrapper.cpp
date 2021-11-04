@@ -377,7 +377,12 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 		}
 		if(!paramValue.empty())
 		{
-			if(iter->second.first)
+			if(!iter->second.second.empty() && parameters_.find(iter->second.second)!=parameters_.end())
+			{
+				RCLCPP_WARN(this->get_logger(), "Rtabmap: Parameter name changed: \"%s\" -> \"%s\". The new parameter is already used with value \"%s\", ignoring the old one with value \"%s\".",
+						iter->first.c_str(), iter->second.second.c_str(), parameters_.find(iter->second.second)->second.c_str(), paramValue.c_str());
+			}
+			else if(iter->second.first)
 			{
 				// can be migrated
 				uInsert(parameters_, ParametersPair(iter->second.second, paramValue));
@@ -403,7 +408,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	// Backward compatibility (MapsManager)
 	mapsManager_.backwardCompatibilityParameters(*this, parameters_);
 
-  int gridSensor = Parameters::defaultGridSensor();
+	int gridSensor = Parameters::defaultGridSensor();
 	if((this->isSubscribedToScan2d() || this->isSubscribedToScan3d() || genScan_) && parameters_.find(Parameters::kGridSensor()) == parameters_.end())
 	{
 		RCLCPP_WARN(this->get_logger(), "Setting \"%s\" parameter to 0 (default 1) as \"subscribe_scan\" or \"subscribe_scan_cloud\" or \"gen_scan\" is "

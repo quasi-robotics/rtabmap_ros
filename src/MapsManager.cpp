@@ -1211,7 +1211,7 @@ void MapsManager::publishMaps(
 			else if(poses.size())
 			{
 				UWARN("Octomap projection map is empty! (poses=%d octomap nodes=%d). "
-						"Make sure you activated \"%s\" and \"%s\"=1. "
+						"Make sure you enabled \"%s\" and set \"%s\"=1. "
 						"See \"$ rosrun rtabmap_ros rtabmap --params | grep Grid\" for more info.",
 						(int)poses.size(), (int)octomap_->octree()->size(),
 						Parameters::kGrid3D().c_str(), Parameters::kGridSensor().c_str());
