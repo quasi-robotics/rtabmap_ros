@@ -2319,7 +2319,7 @@ std::map<int, Transform> CoreWrapper::filterNodesToAssemble(
 	std::map<int, Transform> output;
 	if(mappingMaxNodes_ > 0)
 	{
-		std::map<int, float> nodesDist = graph::findNearestNodes(nodes, currentPose, mappingMaxNodes_);
+		std::map<int, float> nodesDist = graph::findNearestNodes(currentPose, nodes, 0.0, 0.0, mappingMaxNodes_);
 		for(std::map<int, float>::iterator iter=nodesDist.begin(); iter!=nodesDist.end(); ++iter)
 		{
 			if(mappingAltitudeDelta_<=0.0 ||
