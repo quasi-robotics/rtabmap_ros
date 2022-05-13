@@ -29,6 +29,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
 find_package(stereo_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
@@ -52,7 +53,7 @@ find_package(image_geometry REQUIRED)
 find_package(octomap_msgs)
 #find_package(apriltag_msgs)
 #find_package(find_object_2d)
-#find_package(move_base_msgs)
+#find_package(fiducial_msgs)
 
 ## System dependencies are found with CMake's conventions
 find_package(RTABMap 0.20.18 REQUIRED)
@@ -148,6 +149,7 @@ ENDIF(RTABMAP_GUI OR rviz_default_plugins_FOUND)
    "srv/ResetPose.srv"
    "srv/SetGoal.srv"
    "srv/SetLabel.srv"
+   "srv/RemoveLabel.srv"
    "srv/GetPlan.srv"
    "srv/AddLink.srv"
    "srv/GetNodeData.srv"
@@ -215,6 +217,7 @@ SET(Libraries
    sensor_msgs
    std_msgs
    nav_msgs
+   nav2_msgs
    geometry_msgs
    image_transport
    tf2
@@ -308,18 +311,18 @@ ENDIF(octomap_msgs_FOUND)
 #ADD_DEFINITIONS("-DWITH_APRILTAG_MSGS")
 #ENDIF(apriltag_msgs_FOUND)
 
-# If move_base_msgs is found, add definition
-IF(move_base_msgs_FOUND)
-MESSAGE(STATUS "WITH move_base_msgs")
+# If fiducial_msgs is found, add definition
+IF(fiducial_msgs_FOUND)
+MESSAGE(STATUS "WITH fiducial_msgs")
 include_directories(
-  ${move_base_msgs_INCLUDE_DIRS}
+  ${fiducial_msgs_INCLUDE_DIRS}
 )
 SET(Libraries
-  move_base_msgs
+  ${fiducial_msgs_LIBRARIES}
   ${Libraries}
 )
-ADD_DEFINITIONS("-DWITH_MOVE_BASE_MSGS")
-ENDIF(move_base_msgs_FOUND)
+ADD_DEFINITIONS("-DWITH_FIDUCIAL_MSGS")
+ENDIF(fiducial_msgs_FOUND)
 
 ############################
 ## Declare a cpp library

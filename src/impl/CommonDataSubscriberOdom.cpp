@@ -74,21 +74,20 @@ void CommonDataSubscriber::setupOdomCallbacks(
 		int queueSize,
 		bool approxSync)
 {
-    RCLCPP_INFO(node.get_logger(), "Setup scan callback. subscribeOdomInfo: %d, subscribeUserData: %d, approxSync: %d",
-                (int)subscribeOdomInfo, (int)subscribeUserData, (int)approxSync);
+	RCLCPP_INFO(node.get_logger(), "Setup scan callback");
 
 	if(subscribeUserData || subscribeOdomInfo)
 	{
-		odomSub_.subscribe(&node, "odom", rmw_qos_profile_sensor_data);
+		odomSub_.subscribe(&node, "odom", rclcpp::QoS(queueSize).reliability(qosOdom_).get_rmw_qos_profile());
 
 #ifdef RTABMAP_SYNC_USER_DATA
 		if(subscribeUserData)
 		{
-			userDataSub_.subscribe(&node, "user_data");
+			userDataSub_.subscribe(&node, "user_data", rclcpp::QoS(queueSize).reliability(qosUserData_).get_rmw_qos_profile());
 			if(subscribeOdomInfo)
 			{
 				subscribedToOdomInfo_ = true;
-				odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
+				odomInfoSub_.subscribe(&node, "odom_info", rclcpp::QoS(queueSize).reliability(qosOdom_).get_rmw_qos_profile());
 				SYNC_DECL3(CommonDataSubscriber, odomDataInfo, approxSync, queueSize, odomSub_, userDataSub_, odomInfoSub_);
 			}
 			else
@@ -101,15 +100,13 @@ void CommonDataSubscriber::setupOdomCallbacks(
 		if(subscribeOdomInfo)
 		{
 			subscribedToOdomInfo_ = true;
-			odomInfoSub_.subscribe(&node, "odom_info", rmw_qos_profile_sensor_data);
+			odomInfoSub_.subscribe(&node, "odom_info", rclcpp::QoS(queueSize).reliability(qosOdom_).get_rmw_qos_profile());
 			SYNC_DECL2(CommonDataSubscriber, odomInfo, approxSync, queueSize, odomSub_, odomInfoSub_);
 		}
 	}
 	else
 	{
-		odomSubOnly_ = node.create_subscription<nav_msgs::msg::Odometry>("odom",
-                                                                     rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data),rmw_qos_profile_sensor_data),
-                                                                     std::bind(&CommonDataSubscriber::odomCallback, this, std::placeholders::_1));
+		odomSubOnly_ = node.create_subscription<nav_msgs::msg::Odometry>("odom", rclcpp::QoS(queueSize).reliability(qosOdom_), std::bind(&CommonDataSubscriber::odomCallback, this, std::placeholders::_1));
 		subscribedTopicsMsg_ =
 				uFormat("\n%s subscribed to:\n   %s",
 				node.get_name(),

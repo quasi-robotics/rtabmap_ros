@@ -68,18 +68,21 @@ void StereoOdometry::onOdomInit()
 	bool subscribeRGBD = false;
 	approxSync = this->declare_parameter("approx_sync", approxSync);
 	queueSize_ = this->declare_parameter("queue_size", queueSize_);
+	int qosCamInfo = this->declare_parameter("qos_camera_info", (int)qos());
 	subscribeRGBD = this->declare_parameter("subscribe_rgbd", subscribeRGBD);
 	keepColor_ = this->declare_parameter("keep_color", keepColor_);
 
 	RCLCPP_INFO(this->get_logger(), "StereoOdometry: approx_sync = %s", approxSync?"true":"false");
 	RCLCPP_INFO(this->get_logger(), "StereoOdometry: queue_size  = %d", queueSize_);
+	RCLCPP_INFO(this->get_logger(), "RGBDOdometry: qos            = %d", (int)qos());
+	RCLCPP_INFO(this->get_logger(), "RGBDOdometry: qos_camera_info = %d", qosCamInfo);
 	RCLCPP_INFO(this->get_logger(), "StereoOdometry: subscribe_rgbd = %s", subscribeRGBD?"true":"false");
 	RCLCPP_INFO(this->get_logger(), "StereoOdometry: keep_color     = %s", keepColor_?"true":"false");
 
 	std::string subscribedTopicsMsg;
 	if(subscribeRGBD)
 	{
-		rgbdSub_ = create_subscription<rtabmap_ros::msg::RGBDImage>("rgbd_image", 5, std::bind(&StereoOdometry::callbackRGBD, this, std::placeholders::_1));
+		rgbdSub_ = create_subscription<rtabmap_ros::msg::RGBDImage>("rgbd_image", rclcpp::QoS(queueSize_).reliability((rmw_qos_reliability_policy_t)qos()), std::bind(&StereoOdometry::callbackRGBD, this, std::placeholders::_1));
 
 		subscribedTopicsMsg =
 				uFormat("\n%s subscribed to:\n   %s",
@@ -89,10 +92,10 @@ void StereoOdometry::onOdomInit()
 	else
 	{
 		image_transport::TransportHints hints(this);
-		imageRectLeft_.subscribe(this, "left/image_rect", hints.getTransport());
-		imageRectRight_.subscribe(this, "right/image_rect", hints.getTransport());
-		cameraInfoLeft_.subscribe(this, "left/camera_info");
-		cameraInfoRight_.subscribe(this, "right/camera_info");
+		imageRectLeft_.subscribe(this, "left/image_rect", hints.getTransport(), rclcpp::QoS(queueSize_).reliability((rmw_qos_reliability_policy_t)qos()).get_rmw_qos_profile());
+		imageRectRight_.subscribe(this, "right/image_rect", hints.getTransport(), rclcpp::QoS(queueSize_).reliability((rmw_qos_reliability_policy_t)qos()).get_rmw_qos_profile());
+		cameraInfoLeft_.subscribe(this, "left/camera_info", rclcpp::QoS(queueSize_).reliability((rmw_qos_reliability_policy_t)qosCamInfo).get_rmw_qos_profile());
+		cameraInfoRight_.subscribe(this, "right/camera_info", rclcpp::QoS(queueSize_).reliability((rmw_qos_reliability_policy_t)qosCamInfo).get_rmw_qos_profile());
 
 		if(approxSync)
 		{
@@ -393,32 +396,39 @@ void StereoOdometry::callbackRGBD(
 				}
 			}
 
-			cv_bridge::CvImageConstPtr ptrImageLeft = imageRectLeft;
+			cv::Mat left;
 			if(imageRectLeft->encoding.compare(sensor_msgs::image_encodings::TYPE_8UC1) !=0 &&
 			   imageRectLeft->encoding.compare(sensor_msgs::image_encodings::MONO8) != 0)
 			{
 				if(keepColor_ && imageRectLeft->encoding.compare(sensor_msgs::image_encodings::MONO16) != 0)
 				{
-					ptrImageLeft = cv_bridge::cvtColor(imageRectLeft, "bgr8");
+					left = cv_bridge::cvtColor(imageRectLeft, "bgr8")->image;
 				}
 				else
 				{
-					ptrImageLeft = cv_bridge::cvtColor(imageRectLeft, "mono8");
+					left = cv_bridge::cvtColor(imageRectLeft, "mono8")->image;
 				}
 			}
-			cv_bridge::CvImageConstPtr ptrImageRight = imageRectRight;
+			else
+			{
+				left = imageRectLeft->image.clone();
+			}
+			cv::Mat right;
 			if(imageRectLeft->encoding.compare(sensor_msgs::image_encodings::TYPE_8UC1) !=0 &&
 			   imageRectLeft->encoding.compare(sensor_msgs::image_encodings::MONO8) != 0)
 			{
-				ptrImageRight = cv_bridge::cvtColor(imageRectRight, "mono8");
+				right = cv_bridge::cvtColor(imageRectRight, "mono8")->image;
+			}
+			else
+			{
+				right = imageRectRight->image.clone();
 			}
 
-			UTimer stepTimer;
 			//
 			UDEBUG("localTransform = %s", localTransform.prettyPrint().c_str());
 			rtabmap::SensorData data(
-					ptrImageLeft->image,
-					ptrImageRight->image,
+					left,
+					right,
 					stereoModel,
 					0,
 					rtabmap_ros::timestampFromROS(stamp));

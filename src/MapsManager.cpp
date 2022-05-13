@@ -71,7 +71,7 @@ MapsManager::MapsManager() :
 #endif
 		octomapTreeDepth_(16),
 		octomapUpdated_(true),
-		latching_(false)
+		latching_(true)
 {
 }
 
@@ -125,35 +125,35 @@ void MapsManager::init(rclcpp::Node & node, const std::string & name, bool)
 
 	// mapping topics
 	latched_.clear();
-	gridMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("map", qos_latched);
+	gridMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&gridMapPub_, false));
-	gridProbMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("grid_prob_map", qos_latched);
+	gridProbMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("grid_prob_map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&gridProbMapPub_, false));
-	cloudMapPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_map", qos_latched);
+	cloudMapPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&cloudMapPub_, false));
-	cloudObstaclesPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_obstacles", qos_latched);
+	cloudObstaclesPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_obstacles", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&cloudObstaclesPub_, false));
-	cloudGroundPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_ground", qos_latched);
+	cloudGroundPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_ground", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&cloudGroundPub_, false));
 
 #ifdef RTABMAP_OCTOMAP
 #ifdef WITH_OCTOMAP_MSGS
-	octoMapPubBin_ = node.create_publisher<octomap_msgs::msg::Octomap>("octomap_binary", qos_latched);
+	octoMapPubBin_ = node.create_publisher<octomap_msgs::msg::Octomap>("octomap_binary", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&octoMapPubBin_, false));
-	octoMapPubFull_ = node.create_publisher<octomap_msgs::msg::Octomap>("octomap_full", qos_latched);
+	octoMapPubFull_ = node.create_publisher<octomap_msgs::msg::Octomap>("octomap_full", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&octoMapPubFull_, false));
 #endif
-	octoMapCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_occupied_space", qos_latched);
+	octoMapCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_occupied_space", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE)); // FIXME latching option in ROS2?
 	latched_.insert(std::make_pair((void*)&octoMapCloud_, false));
-	octoMapFrontierCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_global_frontier_space", qos_latched);
+	octoMapFrontierCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_global_frontier_space", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&octoMapFrontierCloud_, false));
-	octoMapObstacleCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_obstacles", qos_latched);
+	octoMapObstacleCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_obstacles", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&octoMapObstacleCloud_, false));
-	octoMapGroundCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_ground", qos_latched);
+	octoMapGroundCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_ground", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&octoMapGroundCloud_, false));
-	octoMapEmptySpace_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_empty_space", qos_latched);
+	octoMapEmptySpace_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_empty_space", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&octoMapEmptySpace_, false));
-	octoMapProj_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("octomap_grid", qos_latched);
+	octoMapProj_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("octomap_grid", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
 	latched_.insert(std::make_pair((void*)&octoMapProj_, false));
 #endif
 }
@@ -186,7 +186,7 @@ void parameterMoved(
 		{
 			RCLCPP_WARN(node.get_logger(), "Parameter \"%s\" has moved from "
 					 "rtabmap_ros to rtabmap library. Use "
-					 "parameter \"%s\" instead. The value \"\" is still "
+					 "parameter \"%s\" instead. The value \"%s\" is still "
 					 "copied to new parameter name.",
 //					 rosName.c_str(),
 					 parameterName.c_str(),
@@ -327,15 +327,17 @@ bool MapsManager::hasSubscribers() const
 			gridMapPub_->get_subscription_count() != 0 ||
 			gridProbMapPub_->get_subscription_count() != 0
 #ifdef RTABMAP_OCTOMAP
-#ifdef WITH_OCTOMAP_MSGS
 			||
+#ifdef WITH_OCTOMAP_MSGS
+			octoMapPubBin_->get_subscription_count() != 0 ||
+			octoMapPubFull_->get_subscription_count() != 0 ||
+#endif
 			octoMapCloud_->get_subscription_count() != 0 ||
 			octoMapFrontierCloud_->get_subscription_count() != 0 ||
 			octoMapObstacleCloud_->get_subscription_count() != 0 ||
 			octoMapGroundCloud_->get_subscription_count() != 0 ||
 			octoMapEmptySpace_->get_subscription_count() != 0 ||
 			octoMapProj_->get_subscription_count() != 0
-#endif
 #endif
 			;
 }
@@ -363,15 +365,17 @@ std::map<int, rtabmap::Transform> MapsManager::updateMapCaches(
 	{
 		//  all false, update only those where we have subscribers
 #ifdef RTABMAP_OCTOMAP
-#ifdef WITH_OCTOMAP_MSGS
 		updateOctomap =
+#ifdef WITH_OCTOMAP_MSGS
+				octoMapPubBin_->get_subscription_count() != 0 ||
+				octoMapPubFull_->get_subscription_count() != 0 ||
+#endif
 				octoMapCloud_->get_subscription_count() != 0 ||
 				octoMapFrontierCloud_->get_subscription_count() != 0 ||
 				octoMapObstacleCloud_->get_subscription_count() != 0 ||
 				octoMapGroundCloud_->get_subscription_count() != 0 ||
 				octoMapEmptySpace_->get_subscription_count() != 0 ||
 				octoMapProj_->get_subscription_count() != 0;
-#endif
 #endif
 
 		updateGrid = gridMapPub_->get_subscription_count() != 0 ||
