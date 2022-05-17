@@ -246,7 +246,7 @@ private:
 	void publishStats(const rclcpp::Time & stamp);
 	void publishCurrentGoal(const rclcpp::Time & stamp);
 
-	void goalResponseCallback(std::shared_future<GoalHandleNav2::SharedPtr> future);
+	void goalResponseCallback(GoalHandleNav2::SharedPtr future);
 	void resultCallback(const GoalHandleNav2::WrappedResult & result);
 
 	void publishLocalPath(const rclcpp::Time & stamp);

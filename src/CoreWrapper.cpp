@@ -4445,9 +4445,8 @@ void CoreWrapper::publishCurrentGoal(const rclcpp::Time & stamp)
 }
 
 void CoreWrapper::goalResponseCallback(
-		std::shared_future<GoalHandleNav2::SharedPtr> future)
+		GoalHandleNav2::SharedPtr goal_handle)
 {
-	auto goal_handle = future.get();
 	if (!goal_handle) {
 		RCLCPP_ERROR(this->get_logger(), "Goal was rejected by server");
 		rtabmap_.clearPath(1);

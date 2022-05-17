@@ -6,9 +6,9 @@ if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
 
-# Default to C++14
+# Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -37,6 +37,7 @@ find_package(image_transport REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 #find_package(eigen_conversions REQUIRED)
 find_package(laser_geometry REQUIRED)
 find_package(pcl_conversions REQUIRED)
@@ -58,7 +59,7 @@ find_package(octomap_msgs)
 ## System dependencies are found with CMake's conventions
 find_package(RTABMap 0.20.18 REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system) # dependencies from PCL
-find_package(PCL 1.7 REQUIRED COMPONENTS kdtree) #This crashes idl generation if all components are found?! see https://github.com/ros2/rosidl/issues/402#issuecomment-565586908
+find_package(PCL REQUIRED COMPONENTS kdtree) #This crashes idl generation if all components are found?! see https://github.com/ros2/rosidl/issues/402#issuecomment-565586908
 
 # optional
 find_package(rviz_common)
@@ -167,6 +168,7 @@ ENDIF(RTABMAP_GUI OR rviz_default_plugins_FOUND)
    DEPENDENCIES geometry_msgs std_msgs sensor_msgs std_srvs visualization_msgs image_geometry
  )
 ament_export_dependencies(rosidl_default_runtime)
+rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
 #add dynamic reconfigure api
 #generate_dynamic_reconfigure_options(cfg/Camera.cfg)
@@ -223,6 +225,7 @@ SET(Libraries
    tf2
    tf2_eigen
    tf2_ros
+   tf2_geometry_msgs
    laser_geometry
    message_filters
    class_loader
@@ -335,13 +338,13 @@ ament_target_dependencies(rtabmap_common ${Libraries})
 ament_target_dependencies(rtabmap_sync ${Libraries})
 ament_target_dependencies(rtabmap_plugins ${Libraries})
 
-target_link_libraries(rtabmap_common ${RTABMap_LIBRARIES})
-target_link_libraries(rtabmap_sync rtabmap_common ${RTABMap_LIBRARIES})
-target_link_libraries(rtabmap_plugins rtabmap_common ${RTABMap_LIBRARIES})
+target_link_libraries(rtabmap_common ${RTABMap_LIBRARIES} "${cpp_typesupport_target}")
+target_link_libraries(rtabmap_sync rtabmap_common ${RTABMap_LIBRARIES} "${cpp_typesupport_target}")
+target_link_libraries(rtabmap_plugins rtabmap_common ${RTABMap_LIBRARIES} "${cpp_typesupport_target}")
 
-rosidl_target_interfaces(rtabmap_common ${PROJECT_NAME} "rosidl_typesupport_cpp")
-rosidl_target_interfaces(rtabmap_sync ${PROJECT_NAME} "rosidl_typesupport_cpp")
-rosidl_target_interfaces(rtabmap_plugins ${PROJECT_NAME} "rosidl_typesupport_cpp")
+add_dependencies(rtabmap_common ${PROJECT_NAME})
+add_dependencies(rtabmap_sync ${PROJECT_NAME})
+add_dependencies(rtabmap_plugins ${PROJECT_NAME})
 
 rclcpp_components_register_nodes(rtabmap_plugins "rtabmap_ros::RGBDOdometry")
 rclcpp_components_register_nodes(rtabmap_plugins "rtabmap_ros::StereoOdometry")
@@ -497,52 +500,6 @@ ament_target_dependencies(rtabmap_pointcloud_to_depthimage ${Libraries})
 target_link_libraries(rtabmap_pointcloud_to_depthimage rtabmap_plugins ${RTABMap_LIBRARIES})
 set_target_properties(rtabmap_pointcloud_to_depthimage PROPERTIES OUTPUT_NAME "pointcloud_to_depthimage")
 
-# Only required when using messages built from the same package
-# https://index.ros.org/doc/ros2/Tutorials/Rosidl-Tutorial/
-get_default_rmw_implementation(rmw_implementation)
-find_package("${rmw_implementation}" REQUIRED)
-get_rmw_typesupport(typesupport_impls "${rmw_implementation}" LANGUAGE "cpp")
-
-foreach(typesupport_impl ${typesupport_impls})
-  rosidl_target_interfaces(rtabmap_rgbd_odometry
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap_stereo_odometry
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap_icp_odometry
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap_rgbd_relay
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap_rgbd_sync
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap_rgbdx_sync
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap_rgb_sync
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap_stereo_sync
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap_pointcloud_to_depthimage
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap_point_cloud_xyzrgb
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  rosidl_target_interfaces(rtabmap
-    ${PROJECT_NAME} ${typesupport_impl}
-  )
-  IF(RTABMAP_GUI)
-    rosidl_target_interfaces(rtabmapviz
-      ${PROJECT_NAME} ${typesupport_impl}
-    )
-  ENDIF()
-endforeach()
 
 # If rviz is found, add plugins
 IF(rviz_default_plugins_FOUND)
