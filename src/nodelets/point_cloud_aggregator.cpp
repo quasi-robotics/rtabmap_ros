@@ -151,7 +151,7 @@ PointCloudAggregator::PointCloudAggregator(const rclcpp::NodeOptions & options) 
 	}
 
 
-	warningThread_ = new std::thread([&](){
+	warningThread_ = new std::thread([this, subscribedTopicsMsg, approx](){
 		rclcpp::Rate r(1.0/5.0);
 		while(!callbackCalled_)
 		{
