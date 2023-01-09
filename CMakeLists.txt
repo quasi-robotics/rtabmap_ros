@@ -727,6 +727,7 @@ install(TARGETS
    rtabmap_obstacles_detection
    rtabmap_point_cloud_aggregator
    rtabmap_point_cloud_assembler
+   rtabmap_lidar_deskewing
 #   rtabmap_camera
    rtabmap_rgbd_sync
    rtabmap_rgbdx_sync
