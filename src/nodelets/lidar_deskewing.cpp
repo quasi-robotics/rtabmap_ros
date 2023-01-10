@@ -56,10 +56,14 @@ void LidarDeskewing::callbackScan(const sensor_msgs::msg::LaserScan::ConstShared
                  msg->header.frame_id.c_str(), fixedFrameId_.c_str(), rtabmap_ros::timestampFromROS(msg->header.stamp));
     return;
   }
-	sensor_msgs::msg::PointCloud2 scanOut;
-	projection_.transformLaserScanToPointCloud(fixedFrameId_, *msg, scanOut, *tfBuffer_);
-
-  pubScan_->publish(scanOut);
+  try {
+    sensor_msgs::msg::PointCloud2 scanOut;
+    projection_.transformLaserScanToPointCloud(fixedFrameId_, *msg, scanOut, *tfBuffer_);
+    pubScan_->publish(scanOut);
+  }
+  catch(const std::exception& ex) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to transform laser scan to point cloud: %s", ex.what());
+  }
 }
 
 void LidarDeskewing::callbackCloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
