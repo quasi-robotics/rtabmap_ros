@@ -8,6 +8,8 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 
+#include <laser_geometry/laser_geometry.hpp>
+
 namespace rtabmap_ros
 {
 
@@ -23,7 +25,8 @@ private:
 	void callbackCloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
 
 private:
-	rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubScan_;
+  laser_geometry::LaserProjection projection_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubScan_;
 	rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud_;
 	rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr subScan_;
 	rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subCloud_;

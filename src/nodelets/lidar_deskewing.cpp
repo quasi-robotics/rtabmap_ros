@@ -50,21 +50,15 @@ LidarDeskewing::~LidarDeskewing()
 
 void LidarDeskewing::callbackScan(const sensor_msgs::msg::LaserScan::ConstSharedPtr msg)
 {
+  if(!tfBuffer_->canTransform(fixedFrameId_, msg->header.frame_id, tf2_ros::fromMsg(msg->header.stamp), tf2::durationFromSec(waitForTransformDuration_)))
+  {
+    RCLCPP_ERROR(this->get_logger(), "Cannot transform scan from \"%s\" frame to \"%s\" frame at time %fs.",
+                 msg->header.frame_id.c_str(), fixedFrameId_.c_str(), rtabmap_ros::timestampFromROS(msg->header.stamp));
+    return;
+  }
 	sensor_msgs::msg::PointCloud2 scanOut;
-	laser_geometry::LaserProjection projection;
-	projection.transformLaserScanToPointCloud(fixedFrameId_, *msg, scanOut, *tfBuffer_);
-/*
-	rtabmap::Transform t = rtabmap_ros::getTransform(msg->header.frame_id, scanOut.header.frame_id, msg->header.stamp, *tfBuffer_, waitForTransformDuration_);
-	if(t.isNull())
-	{
-		RCLCPP_ERROR(this->get_logger(), "Cannot transform back projected scan from \"%s\" frame to \"%s\" frame at time %fs.",
-				scanOut.header.frame_id.c_str(), msg->header.frame_id.c_str(), rtabmap_ros::timestampFromROS(msg->header.stamp));
-		return;
-	}
-	sensor_msgs::msg::PointCloud2 scanOutDeskewed;
-	rtabmap_ros::transformPointCloud(t.toEigen4f(), scanOut, scanOutDeskewed);
-	pubScan_->publish(scanOutDeskewed);
-*/
+	projection_.transformLaserScanToPointCloud(fixedFrameId_, *msg, scanOut, *tfBuffer_);
+
   pubScan_->publish(scanOut);
 }
 
