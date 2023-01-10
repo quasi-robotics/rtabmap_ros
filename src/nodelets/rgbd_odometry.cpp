@@ -87,6 +87,7 @@ void RGBDOdometry::onOdomInit()
 	approxSyncMaxInterval = this->declare_parameter("approx_sync_max_interval", approxSyncMaxInterval);
 	queueSize_ = this->declare_parameter("queue_size", queueSize_);
 	int qosCamInfo = this->declare_parameter("qos_camera_info", (int)qos());
+  int qosCam = this->declare_parameter("qos_camera", (int)qos());
 	subscribeRGBD = this->declare_parameter("subscribe_rgbd", subscribeRGBD);
 	rgbdCameras = this->declare_parameter("rgbd_cameras", rgbdCameras);
 	if(rgbdCameras <= 0)
@@ -104,6 +105,7 @@ void RGBDOdometry::onOdomInit()
 		RCLCPP_INFO(this->get_logger(), "RGBDOdometry: approx_sync_max_interval = %f", approxSyncMaxInterval);
 	RCLCPP_INFO(this->get_logger(), "RGBDOdometry: queue_size     = %d", queueSize_);
 	RCLCPP_INFO(this->get_logger(), "RGBDOdometry: qos            = %d", (int)qos());
+  RCLCPP_INFO(this->get_logger(), "RGBDOdometry: qos_camera     = %d", qosCam);
 	RCLCPP_INFO(this->get_logger(), "RGBDOdometry: qos_camera_info = %d", qosCamInfo);
 	RCLCPP_INFO(this->get_logger(), "RGBDOdometry: subscribe_rgbd = %s", subscribeRGBD?"true":"false");
 	RCLCPP_INFO(this->get_logger(), "RGBDOdometry: rgbd_cameras   = %d", rgbdCameras);
@@ -277,8 +279,8 @@ void RGBDOdometry::onOdomInit()
 	else
 	{
 		image_transport::TransportHints hints(this);
-		image_mono_sub_.subscribe(this, "rgb/image", hints.getTransport(), rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qos()).get_rmw_qos_profile());
-		image_depth_sub_.subscribe(this, "depth/image", hints.getTransport(), rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qos()).get_rmw_qos_profile());
+		image_mono_sub_.subscribe(this, "rgb/image", hints.getTransport(), rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qosCam).get_rmw_qos_profile());
+		image_depth_sub_.subscribe(this, "depth/image", hints.getTransport(), rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qosCam).get_rmw_qos_profile());
 		info_sub_.subscribe(this, "rgb/camera_info", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qosCamInfo).get_rmw_qos_profile());
 
 		if(approxSync)
