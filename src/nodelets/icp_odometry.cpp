@@ -81,6 +81,8 @@ void ICPOdometry::onOdomInit()
 	scanNormalK_ = this->declare_parameter("scan_normal_k", scanNormalK_);
 	scanNormalRadius_ = this->declare_parameter("scan_normal_radius", scanNormalRadius_);
 	scanNormalGroundUp_ = this->declare_parameter("scan_normal_ground_up", scanNormalGroundUp_);
+  int qos_scan = this->declare_parameter("qos_scan", (int)qos());
+  int qos_cloud = scanNormalGroundUp_ = this->declare_parameter("qos_cloud", (int)qos());
 
 	/*if (pnh.hasParam("plugins"))
 	{
@@ -112,6 +114,8 @@ void ICPOdometry::onOdomInit()
 	}*/
 
 	RCLCPP_INFO(this->get_logger(), "IcpOdometry: qos                    = %d", (int)qos());
+  RCLCPP_INFO(this->get_logger(), "IcpOdometry: qos_scan               = %d", (int)qos_scan);
+  RCLCPP_INFO(this->get_logger(), "IcpOdometry: qos_cloud              = %d", (int)qos_cloud);
 	RCLCPP_INFO(this->get_logger(), "IcpOdometry: scan_cloud_max_points  = %d", scanCloudMaxPoints_);
 	RCLCPP_INFO(this->get_logger(), "IcpOdometry: scan_downsampling_step = %d", scanDownsamplingStep_);
 	RCLCPP_INFO(this->get_logger(), "IcpOdometry: scan_range_min         = %f m", scanRangeMin_);
@@ -123,8 +127,8 @@ void ICPOdometry::onOdomInit()
 	RCLCPP_INFO(this->get_logger(), "IcpOdometry: deskewing              = %s", deskewing_?"true":"false");
 	RCLCPP_INFO(this->get_logger(), "IcpOdometry: deskewing_slerp        = %s", deskewingSlerp_?"true":"false");
 
-	scan_sub_ = create_subscription<sensor_msgs::msg::LaserScan>("scan", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qos()), std::bind(&ICPOdometry::callbackScan, this, std::placeholders::_1));
-	cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>("scan_cloud", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qos()), std::bind(&ICPOdometry::callbackCloud, this, std::placeholders::_1));
+	scan_sub_ = create_subscription<sensor_msgs::msg::LaserScan>("scan", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qos_scan), std::bind(&ICPOdometry::callbackScan, this, std::placeholders::_1));
+	cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>("scan_cloud", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qos_cloud), std::bind(&ICPOdometry::callbackCloud, this, std::placeholders::_1));
 
 	filtered_scan_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("odom_filtered_input_scan", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qos()));
 }
@@ -337,7 +341,7 @@ void ICPOdometry::callbackScan(const sensor_msgs::msg::LaserScan::SharedPtr scan
 	else
 	{
 		projection.projectLaser(*scanMsg, scanOut, -1.0, laser_geometry::channel_option::Intensity | laser_geometry::channel_option::Timestamp);
-
+/*
 		if(previousStamp() > 0 && !velocityGuess().isNull())
 		{
 			// deskew with constant velocity model
@@ -348,6 +352,7 @@ void ICPOdometry::callbackScan(const sensor_msgs::msg::LaserScan::SharedPtr scan
 				return;
 			}
 		}
+*/
 	}
 
 	bool hasIntensity = false;
