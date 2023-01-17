@@ -50,20 +50,40 @@ LidarDeskewing::~LidarDeskewing()
 
 void LidarDeskewing::callbackScan(const sensor_msgs::msg::LaserScan::ConstSharedPtr msg)
 {
-  if(!tfBuffer_->canTransform(fixedFrameId_, msg->header.frame_id, tf2_ros::fromMsg(msg->header.stamp), tf2::durationFromSec(waitForTransformDuration_)))
-  {
-    RCLCPP_ERROR(this->get_logger(), "Cannot transform scan from \"%s\" frame to \"%s\" frame at time %fs.",
-                 msg->header.frame_id.c_str(), fixedFrameId_.c_str(), rtabmap_ros::timestampFromROS(msg->header.stamp));
-    return;
-  }
+	// make sure the frame of the laser is updated during the whole scan time
+	rtabmap::Transform tmpT = rtabmap_ros::getTransform(
+			msg->header.frame_id,
+			fixedFrameId_,
+			msg->header.stamp,
+			rclcpp::Time(msg->header.stamp.sec, msg->header.stamp.nanosec) + rclcpp::Duration::from_seconds(msg->ranges.size()*msg->time_increment),
+			*tfBuffer_,
+			waitForTransformDuration_);
+	if(tmpT.isNull())
+	{
+		return;
+	}
+
+	sensor_msgs::msg::PointCloud2 scanOut;
+	laser_geometry::LaserProjection projection;
   try {
-    sensor_msgs::msg::PointCloud2 scanOut;
-    projection_.transformLaserScanToPointCloud(fixedFrameId_, *msg, scanOut, *tfBuffer_);
-    pubScan_->publish(scanOut);
+  	projection.transformLaserScanToPointCloud(fixedFrameId_, *msg, scanOut, *tfBuffer_);
   }
   catch(const std::exception& ex) {
     RCLCPP_ERROR(this->get_logger(), "Failed to transform laser scan to point cloud: %s", ex.what());
+    return;
   }
+
+	rtabmap::Transform t = rtabmap_ros::getTransform(msg->header.frame_id, scanOut.header.frame_id, msg->header.stamp, *tfBuffer_, waitForTransformDuration_);
+	if(t.isNull())
+	{
+		RCLCPP_ERROR(this->get_logger(), "Cannot transform back projected scan from \"%s\" frame to \"%s\" frame at time %fs.",
+				scanOut.header.frame_id.c_str(), msg->header.frame_id.c_str(), rtabmap_ros::timestampFromROS(msg->header.stamp));
+		return;
+	}
+
+	sensor_msgs::msg::PointCloud2 scanOutDeskewed;
+	rtabmap_ros::transformPointCloud(t.toEigen4f(), scanOut, scanOutDeskewed);
+	pubScan_->publish(scanOutDeskewed);
 }
 
 void LidarDeskewing::callbackCloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
