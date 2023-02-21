@@ -53,6 +53,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 using namespace rtabmap;
 
+namespace rtabmap_ros {
+
 MapsManager::MapsManager() :
 		cloudOutputVoxelized_(true),
 		cloudSubtractFiltering_(false),
@@ -340,6 +342,17 @@ bool MapsManager::hasSubscribers() const
 			octoMapProj_->get_subscription_count() != 0
 #endif
 			;
+}
+
+bool MapsManager::isMapUpdated() const
+{
+	// We are currently using the check made in OccupancyGrid::update()
+	// to know if the map/graph changed. If there are no subscribers to
+	// any grid topics, we won't know it, so we will assume the graph
+	// changed.
+	return gridUpdated_ ||
+			(gridMapPub_->get_subscription_count() == 0 &&
+			 gridProbMapPub_->get_subscription_count() == 0);
 }
 
 std::map<int, Transform> MapsManager::getFilteredPoses(const std::map<int, Transform> & poses)
@@ -1412,3 +1425,4 @@ cv::Mat MapsManager::getGridProbMap(
 	return occupancyGrid_->getProbMap(xMin, yMin);
 }
 
+} // namespace rtabmap_ros
