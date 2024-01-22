@@ -680,7 +680,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 			if(tfDelay == 0)
 				return;
 			rclcpp::Rate r(1.0 / tfDelay);
-			while(tfThreadRunning_)
+			while(tfThreadRunning_ && rclcpp::ok())
 			{
 				if(!odomFrameId_.empty())
 				{
@@ -694,7 +694,8 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 					tfBroadcaster_->sendTransform(msg);
 					mapToOdomMutex_.unlock();
 				}
-				r.sleep();
+				if(rclcpp::ok())
+					r.sleep();
 			}
 		});
 	}

@@ -17,7 +17,7 @@ class SyncDiagnostic {
     public:
         SyncDiagnostic(rclcpp::Node * node, double tolerance = 0.1, int windowSize = 5) :
         	node_(node),
-			diagnosticUpdater_(node),
+			diagnosticUpdater_(node, 2.0),
             frequencyStatus_(diagnostic_updater::FrequencyStatusParam(&targetFrequency_, &targetFrequency_, tolerance)),
 			timeStampStatus_(diagnostic_updater::TimeStampStatusParam()),
 			compositeTask_("Sync status"),
