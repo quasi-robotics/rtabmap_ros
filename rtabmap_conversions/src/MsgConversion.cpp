@@ -38,8 +38,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/utilite/ULogger.h>
 #include <rtabmap/utilite/UTimer.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <image_geometry/pinhole_camera_model.h>
-#include <image_geometry/stereo_camera_model.h>
+#include <image_geometry/pinhole_camera_model.hpp>
+#include <image_geometry/stereo_camera_model.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/point_field.hpp>
 #include <geometry_msgs/msg/transform.hpp>
