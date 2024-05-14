@@ -29,7 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <sensor_msgs/image_encodings.hpp>
 
-#include <image_geometry/stereo_camera_model.h>
+#include <image_geometry/stereo_camera_model.hpp>
 
 #include "rtabmap_conversions/MsgConversion.h"
 #include <rtabmap_msgs/msg/rgbd_images.hpp>

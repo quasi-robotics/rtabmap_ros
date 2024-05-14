@@ -31,10 +31,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <rtabmap_conversions/MsgConversion.h>
 
-#include <image_geometry/pinhole_camera_model.h>
-#include <image_geometry/stereo_camera_model.h>
+#include <image_geometry/pinhole_camera_model.hpp>
+#include <image_geometry/stereo_camera_model.hpp>
 
-#include <cv_bridge/cv_bridge.h>
+#include <cv_bridge/cv_bridge.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
 #include "rtabmap/core/util2d.h"

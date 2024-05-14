@@ -27,7 +27,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <rtabmap_odom/rgbd_odometry.hpp>
 
-#include <image_geometry/stereo_camera_model.h>
+#include <image_geometry/stereo_camera_model.hpp>
 
 #include <sensor_msgs/image_encodings.hpp>
 

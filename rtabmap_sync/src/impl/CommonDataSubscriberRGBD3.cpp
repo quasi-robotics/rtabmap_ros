@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap_sync/CommonDataSubscriber.h>
 #include <rtabmap/utilite/UConversion.h>
 #include <rtabmap/core/Compression.h>
-#include <cv_bridge/cv_bridge.h>
+#include <cv_bridge/cv_bridge.hpp>
 #include "../../../rtabmap_conversions/include/rtabmap_conversions/MsgConversion.h"
 
 namespace rtabmap_sync {
