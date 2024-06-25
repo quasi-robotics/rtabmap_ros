@@ -36,9 +36,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <std_msgs/msg/bool.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <sensor_msgs/image_encodings.hpp>
+#ifdef PRE_ROS_IRON
+#include <cv_bridge/cv_bridge.h>
+#else
 #include <cv_bridge/cv_bridge.hpp>
+#endif
 #include <pcl_conversions/pcl_conversions.h>
+#if PCL_VERSION_COMPARE(>, 1, 12, 0)
+#include <pcl/common/io.h>
+#else
 #include <pcl/io/io.h>
+#endif
 
 #include <visualization_msgs/msg/marker_array.hpp>
 
@@ -196,6 +204,12 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	waitForTransform_ = this->declare_parameter("wait_for_transform", waitForTransform_);
 	initialPoseStr = this->declare_parameter("initial_pose", initialPoseStr);
 	useActionForGoal_ = this->declare_parameter("use_action_for_goal", useActionForGoal_);
+#ifndef WITH_NAV2_MSGS
+	if(useActionForGoal_)
+	{
+		RCLCPP_ERROR(this->get_logger(), "rtabmap: Cannot enable use_action_for_goal because rtabmap_slam is not built with nav2_msgs support.");
+	}
+#endif
 	useSavedMap_ = this->declare_parameter("use_saved_map", useSavedMap_);
 	genScan_ = this->declare_parameter("gen_scan", genScan_);
 	genScanMaxDepth_ = this->declare_parameter("gen_scan_max_depth", genScanMaxDepth_);
@@ -733,7 +747,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 		}
 		auto node = rclcpp::Node::make_shared("rtabmap");
 		image_transport::TransportHints hints(this);
-		defaultSub_ = image_transport::create_subscription(node.get(), "image", std::bind(&CoreWrapper::defaultCallback, this, std::placeholders::_1), hints.getTransport(), rclcpp::QoS(queueSize_).reliability((rmw_qos_reliability_policy_t)qosImage_).get_rmw_qos_profile());
+		defaultSub_ = image_transport::create_subscription(node.get(), "image", std::bind(&CoreWrapper::defaultCallback, this, std::placeholders::_1), hints.getTransport(), rclcpp::QoS(this->getTopicQueueSize()).reliability((rmw_qos_reliability_policy_t)qosImage_).get_rmw_qos_profile());
 
 
 		RCLCPP_INFO(this->get_logger(), "\n%s subscribed to:\n   %s", get_name(), defaultSub_.getTopic().c_str());
@@ -2200,7 +2214,11 @@ void CoreWrapper::process(
 					{
 						// Don't send status yet if nav2 actionlib is used unless it failed,
 						// let nav2 finish reaching the goal
+#ifdef WITH_NAV2_MSGS
 						if(nav2Client_ == 0 || rtabmap_.getPathStatus() <= 0)
+#else
+						if(rtabmap_.getPathStatus() <= 0)
+#endif
 						{
 							if(rtabmap_.getPathStatus() > 0)
 							{
@@ -2210,10 +2228,12 @@ void CoreWrapper::process(
 							else if(rtabmap_.getPathStatus() <= 0)
 							{
 								RCLCPP_WARN(this->get_logger(), "Planning: Plan failed!");
+#ifdef WITH_NAV2_MSGS
 								if(nav2Client_.get()!=NULL && nav2Client_->action_server_is_ready())
 								{
 									nav2Client_->async_cancel_all_goals();
 								}
+#endif
 							}
 
 							if(goalReachedPub_->get_subscription_count())
@@ -3965,11 +3985,12 @@ void CoreWrapper::cancelGoalCallback(
 			goalReachedPub_->publish(result);
 		}
 	}
-
+#ifdef WITH_NAV2_MSGS
 	if(nav2Client_.get() != NULL && nav2Client_->action_server_is_ready())
 	{
 		nav2Client_->async_cancel_all_goals();
 	}
+#endif
 }
 
 void CoreWrapper::setLabelCallback(
@@ -4365,6 +4386,7 @@ void CoreWrapper::publishCurrentGoal(const rclcpp::Time & stamp)
 		poseMsg.header.frame_id = mapFrameId_;
 		poseMsg.header.stamp = stamp;
 		rtabmap_conversions::transformToPoseMsg(currentMetricGoal_, poseMsg.pose);
+#ifdef WITH_NAV2_MSGS
 		if(useActionForGoal_)
 		{
 			if(nav2Client_.get() == NULL || !nav2Client_->action_server_is_ready())
@@ -4396,6 +4418,7 @@ void CoreWrapper::publishCurrentGoal(const rclcpp::Time & stamp)
 				RCLCPP_ERROR(this->get_logger(), "Cannot connect to navigate_to_pose action server!");
 			}
 		}
+#endif
 		if(nextMetricGoalPub_->get_subscription_count())
 		{
 			nextMetricGoalPub_->publish(poseMsg);
@@ -4406,7 +4429,7 @@ void CoreWrapper::publishCurrentGoal(const rclcpp::Time & stamp)
 		}
 	}
 }
-
+#ifdef WITH_NAV2_MSGS
 void CoreWrapper::goalResponseCallback(
 #ifdef NAV_MSGS_FOXY
 		std::shared_future<GoalHandleNav2::SharedPtr> future)
@@ -4474,6 +4497,7 @@ void CoreWrapper::resultCallback(
 		latestNodeWasReached_ = false;
 	}
 }
+#endif
 
 void CoreWrapper::publishLocalPath(const rclcpp::Time & stamp)
 {
