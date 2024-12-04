@@ -923,7 +923,8 @@ void cameraModelToROS(
 	UASSERT(model.R().empty() || model.R().total() == 9);
 	if(model.R().empty())
 	{
-		memset(camInfo.r.data(), 0.0, 9*sizeof(double));
+		cv::Mat eye = cv::Mat::eye(3,3,CV_64FC1);
+		memcpy(camInfo.r.data(), eye.data, 9*sizeof(double));
 	}
 	else
 	{
@@ -934,6 +935,10 @@ void cameraModelToROS(
 	if(model.P().empty())
 	{
 		memset(camInfo.p.data(), 0.0, 12*sizeof(double));
+		if(!model.K_raw().empty()) {
+			model.K_raw().copyTo(cv::Mat(3,4,CV_64FC1, camInfo.p.data()).colRange(0,3));
+			camInfo.p.back() = 1.0;
+		}
 	}
 	else
 	{
@@ -1691,18 +1696,6 @@ rtabmap::OdometryInfo odomInfoFromROS(const rtabmap_msgs::msg::OdomInfo & msg, b
 	info.localBundleOutliers = msg.local_bundle_outliers;
 	info.localBundleConstraints = msg.local_bundle_constraints;
 	info.localBundleTime = msg.local_bundle_time;
-	UASSERT(msg.local_bundle_models.size() == msg.local_bundle_ids.size());
-	UASSERT(msg.local_bundle_models.size() == msg.local_bundle_poses.size());
-	for(size_t i=0; i<msg.local_bundle_ids.size(); ++i)
-	{
-		std::vector<rtabmap::CameraModel> models;
-		for(size_t j=0; j<msg.local_bundle_models[i].models.size(); ++j)
-		{
-			models.push_back(cameraModelFromROS(msg.local_bundle_models[i].models[j].camera_info, transformFromGeometryMsg(msg.local_bundle_models[i].models[j].local_transform)));
-		}
-		info.localBundleModels.insert(std::make_pair(msg.local_bundle_ids[i], models));
-		info.localBundlePoses.insert(std::make_pair(msg.local_bundle_ids[i], transformFromPoseMsg(msg.local_bundle_poses[i])));
-	}
 	info.keyFrameAdded = msg.key_frame_added;
 	info.timeEstimation = msg.time_estimation;
 	info.timeParticleFiltering =  msg.time_particle_filtering;
@@ -1720,6 +1713,19 @@ rtabmap::OdometryInfo odomInfoFromROS(const rtabmap_msgs::msg::OdomInfo & msg, b
 
 	if(!ignoreData)
 	{
+		UASSERT(msg.local_bundle_models.size() == msg.local_bundle_ids.size());
+		UASSERT(msg.local_bundle_models.size() == msg.local_bundle_poses.size());
+		for(size_t i=0; i<msg.local_bundle_ids.size(); ++i)
+		{
+			std::vector<rtabmap::CameraModel> models;
+			for(size_t j=0; j<msg.local_bundle_models[i].models.size(); ++j)
+			{
+				models.push_back(cameraModelFromROS(msg.local_bundle_models[i].models[j].camera_info, transformFromGeometryMsg(msg.local_bundle_models[i].models[j].local_transform)));
+			}
+			info.localBundleModels.insert(std::make_pair(msg.local_bundle_ids[i], models));
+			info.localBundlePoses.insert(std::make_pair(msg.local_bundle_ids[i], transformFromPoseMsg(msg.local_bundle_poses[i])));
+		}
+		
 		UASSERT(msg.words_keys.size() == msg.words_values.size());
 		for(unsigned int i=0; i<msg.words_keys.size(); ++i)
 		{
@@ -2168,7 +2174,7 @@ bool convertRGBDMsgs(
 		rtabmap::Transform localTransform = rtabmap_conversions::getTransform(frameId, !imageMsgs.empty()?imageMsgs[i]->header.frame_id:cameraInfoMsgs[i].header.frame_id, stamp, listener, waitForTransform);
 		if(localTransform.isNull())
 		{
-			UERROR("TF of received image %d at time %fs is not set!", i, stamp.seconds());
+			UERROR("TF of received image for camera %d at time %fs is not set!", i, stamp.seconds());
 			return false;
 		}
 		// sync with odometry stamp
@@ -3052,6 +3058,25 @@ bool deskew_impl(
 			}
 		}
 
+		if(secFirst > 1.e18)
+		{
+			// convert nanoseconds to seconds
+			secFirst /= 1.e9;
+			secLast /= 1.e9;
+		}
+		else if(secFirst > 1.e15)
+		{
+			// convert microseconds to seconds
+			secFirst /= 1.e6;
+			secLast /= 1.e6;
+		}
+		else if(secFirst > 1.e12)
+		{
+			// convert milliseconds to seconds
+			secFirst /= 1.e3;
+			secLast /= 1.e3;
+		}
+
 		firstStamp = timestampToROS(secFirst);
 		lastStamp = timestampToROS(secLast);
 	}
@@ -3190,6 +3215,21 @@ bool deskew_impl(
 			else if(timeDatatype == 8) //float64
 			{
 				double sec = *((const double*)(&output.data[u*output.point_step]+offsetTime));
+				if(sec > 1.e18)
+				{
+					// convert nanoseconds to seconds
+					sec /= 1.e9;
+				}
+				else if(sec > 1.e15)
+				{
+					// convert microseconds to seconds
+					sec /= 1.e6;
+				}
+				else if(sec > 1.e12)
+				{
+					// sec milliseconds to seconds
+					sec /= 1.e3;
+				}
 				stamp = timestampToROS(sec);
 			}
 
@@ -3269,6 +3309,21 @@ bool deskew_impl(
 			else if(timeDatatype == 8)
 			{
 				double sec = *((const double*)(&output.data[v*output.row_step]+offsetTime));
+				if(sec > 1.e18)
+				{
+					// convert nanoseconds to seconds
+					sec /= 1.e9;
+				}
+				else if(sec > 1.e15)
+				{
+					// convert microseconds to seconds
+					sec /= 1.e6;
+				}
+				else if(sec > 1.e12)
+				{
+					// sec milliseconds to seconds
+					sec /= 1.e3;
+				}
 				stamp = timestampToROS(sec);
 			}
 
