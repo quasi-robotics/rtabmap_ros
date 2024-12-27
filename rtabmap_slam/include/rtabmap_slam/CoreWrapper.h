@@ -272,7 +272,6 @@ private:
 
 private:
 	rtabmap::Rtabmap rtabmap_;
-	bool paused_;
 
 	UMutex lastPoseMutex_;
 	rtabmap::Transform lastPose_;

@@ -712,7 +712,7 @@ void CommonDataSubscriber::setupCallbacks(
 	if(subscribedToDepth_ || subscribedToStereo_ || subscribedToRGBD_ || subscribedToScan2d_ || subscribedToScan3d_ || subscribedToScanDescriptor_ || subscribedToRGB_ || subscribedToOdom_)
 	{
 		RCLCPP_INFO(node.get_logger(), "%s", subscribedTopicsMsg_.c_str());
-		syncDiagnostic_.reset(new SyncDiagnostic(&node, 0.5));
+		syncDiagnostic_.reset(new SyncDiagnostic(&node, 0.5, 5, paused_));
 		syncDiagnostic_->init("",
 			uFormat("%s: Did not receive data since 5 seconds! Make sure the input topics are "
 					"published (\"$ ros2 topic hz my_topic\") and the timestamps in their "

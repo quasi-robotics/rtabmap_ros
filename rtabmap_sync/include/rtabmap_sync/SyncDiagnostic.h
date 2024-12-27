@@ -16,7 +16,7 @@ namespace rtabmap_sync {
 
 class SyncDiagnostic {
     public:
-        SyncDiagnostic(rclcpp::Node * node, double tolerance = 0.2, int windowSize = 5) :
+        SyncDiagnostic(rclcpp::Node * node, double tolerance = 0.2, int windowSize = 5, bool paused = false) :
 		node_(node),
 		diagnosticUpdater_(node, 2.0),
 		inFrequencyStatus_(diagnostic_updater::FrequencyStatusParam(&inTargetFrequency_, &inTargetFrequency_, tolerance), node->get_clock()),
@@ -29,7 +29,8 @@ class SyncDiagnostic {
 		lastTickOutputStamp_(rtabmap_conversions::timestampFromROS(node_->now())-1),
         inTargetFrequency_(0.0),
 		outTargetFrequency_(0.0),
-		windowSize_(windowSize)
+		windowSize_(windowSize),
+        paused_(paused)
     {
         UASSERT(windowSize_ >= 1);
     }
@@ -64,33 +65,46 @@ class SyncDiagnostic {
 
     void tickInput(const rclcpp::Time & stamp, double expectedFrequency = 0)
     {
-        updateFrequency(
-            stamp,
-            expectedFrequency,
-            inFrequencyStatus_,
-            inTimeStampStatus_,
-            inWindow_,
-            inTargetFrequency_,
-            lastTickInputStamp_);
+        if(!paused_)
+            updateFrequency(
+                stamp,
+                expectedFrequency,
+                inFrequencyStatus_,
+                inTimeStampStatus_,
+                inWindow_,
+                inTargetFrequency_,
+                lastTickInputStamp_);
     }
 
     void tickOutput(const rclcpp::Time & stamp, double expectedFrequency = 0)
     {
-        updateFrequency(
-            stamp,
-            expectedFrequency,
-            outFrequencyStatus_,
-            outTimeStampStatus_,
-            outWindow_,
-            outTargetFrequency_,
-            lastTickOutputStamp_);
+        if(!paused_)
+            updateFrequency(
+                stamp,
+                expectedFrequency,
+                outFrequencyStatus_,
+                outTimeStampStatus_,
+                outWindow_,
+                outTargetFrequency_,
+                lastTickOutputStamp_);
+    }
+
+    void pause() {
+        paused_ = true;
+        UScopeMutex lock(tickMutex_);
+        inWindow_.clear();
+        outWindow_.clear();
+    }
+
+    void resume() {
+        paused_ = false;
     }
 
 private:
     void diagnosticTimerCallback()
     {
         UScopeMutex lock(tickMutex_);
-        if(rtabmap_conversions::timestampFromROS(node_->now())-lastTickInputStamp_ >= 5 && !topicsNotReceivedWarningMsg_.empty())
+        if(!paused_ && rtabmap_conversions::timestampFromROS(node_->now())-lastTickInputStamp_ >= 5 && !topicsNotReceivedWarningMsg_.empty())
         {
         	RCLCPP_WARN(node_->get_logger(), "%s", topicsNotReceivedWarningMsg_.c_str());
         }
@@ -161,6 +175,7 @@ private:
 	std::deque<double> inWindow_;
     std::deque<double> outWindow_;
     UMutex tickMutex_;
+    bool paused_ {false};
 
 };
 

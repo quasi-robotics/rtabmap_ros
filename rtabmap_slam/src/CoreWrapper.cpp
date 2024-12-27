@@ -97,7 +97,6 @@ namespace rtabmap_slam {
 CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 		Node("rtabmap", options),
 		rtabmap_sync::CommonDataSubscriber(*this, false),
-		paused_(false),
 		lastPose_(Transform::getIdentity()),
 		lastPoseIntermediate_(false),
 		latestNodeWasReached_(false),
@@ -346,7 +345,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	}
 
 	// declare parameters
-	this->declare_parameter("is_rtabmap_paused", paused_);
+	paused_ = this->declare_parameter("is_rtabmap_paused", paused_);
 	if(paused_)
 	{
 		RCLCPP_WARN(get_logger(), "Node paused... don't forget to call service \"resume\" to start rtabmap.");
@@ -3002,6 +3001,7 @@ void CoreWrapper::pauseRtabmapCallback(
 		paused_ = true;
 		RCLCPP_INFO(this->get_logger(), "rtabmap: paused!");
 		set_parameter(rclcpp::Parameter("is_rtabmap_paused", true));
+		syncDiagnostic_->pause();
 	}
 }
 
@@ -3019,6 +3019,7 @@ void CoreWrapper::resumeRtabmapCallback(
 		paused_ = false;
 		RCLCPP_INFO(this->get_logger(), "rtabmap: resumed!");
 		set_parameter(rclcpp::Parameter("is_rtabmap_paused", false));
+		syncDiagnostic_->resume();
 	}
 }
 

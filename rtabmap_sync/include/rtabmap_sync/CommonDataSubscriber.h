@@ -253,6 +253,9 @@ protected:
 	rmw_qos_reliability_policy_t qosUserData_;
 	rmw_qos_reliability_policy_t qosSensorData_;
 
+	bool paused_;
+	std::unique_ptr<SyncDiagnostic> syncDiagnostic_;
+
 private:
 	bool approxSync_;
 	bool subscribedToDepth_;
@@ -304,8 +307,6 @@ private:
 	rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::ConstSharedPtr scan3dSubOnly_;
 	rclcpp::Subscription<rtabmap_msgs::msg::ScanDescriptor>::ConstSharedPtr scanDescSubOnly_;
 	rclcpp::Subscription<nav_msgs::msg::Odometry>::ConstSharedPtr odomSubOnly_;
-
-	std::unique_ptr<SyncDiagnostic> syncDiagnostic_;
 
 	// RGB + Depth
 	DATA_SYNCS3(depth, sensor_msgs::msg::Image, sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo)
