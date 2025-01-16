@@ -883,6 +883,8 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 				{
 					return;
 				}
+        if(event->changed_parameters.size() == 1 && event->changed_parameters[0].name == "is_rtabmap_paused")
+          return;   // skip internal changes of "is_rtabmap_paused" parameter on pause()/resume() service calls
 				RCLCPP_INFO(this->get_logger(), "Parameters event received!");
 				if(event->changed_parameters.size())
 				{

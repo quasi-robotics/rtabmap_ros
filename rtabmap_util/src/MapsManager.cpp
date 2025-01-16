@@ -248,8 +248,9 @@ void MapsManager::backwardCompatibilityParameters(rclcpp::Node & node, Parameter
 void MapsManager::setParameters(const rtabmap::ParametersMap & parameters)
 {
 	parameters_ = parameters;
-	delete occupancyGrid_;
+  delete occupancyGrid_;
 	occupancyGrid_ = new OccupancyGrid(&localMaps_, parameters_);
+  UINFO("Grid map cache reset");
 	localMapMaker_->parseParameters(parameters_);
 
 #ifdef RTABMAP_OCTOMAP
@@ -386,6 +387,7 @@ std::map<int, rtabmap::Transform> MapsManager::updateMapCaches(
 		bool updateOctomap,
 		const std::map<int, rtabmap::Signature> & signatures)
 {
+  UINFO("Updating map caches");
 	bool updateGridCache = updateGrid || updateOctomap;
 	bool updateElevation = false;
 	if(!updateGrid && !updateOctomap && !updateOctomap)
