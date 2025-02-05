@@ -387,6 +387,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	
 	char ** argv = new char*[argList.size()];
 	bool deleteDbOnStart = false;
+	deleteDbOnStart = this->declare_parameter("delete_db_on_start", deleteDbOnStart);
 	for(unsigned int i=0; i<argList.size(); ++i)
 	{
 		argv[i] = &argList[i].at(0);
