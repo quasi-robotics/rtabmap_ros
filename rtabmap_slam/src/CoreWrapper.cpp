@@ -144,7 +144,6 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	char * rosHomePath = getenv("ROS_HOME");
 	std::string workingDir = rosHomePath?rosHomePath:UDirectory::homeDir()+"/.ros";
 	databasePath_ = workingDir+"/"+rtabmap::Parameters::getDefaultDatabaseName();
-	globalPose_.header.stamp = rclcpp::Time(0);
 
 	mapsManager_.init(*this, this->get_name(), true);
 
@@ -844,12 +843,18 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 
 	// Setup callback groups for any subscriptions that should not be affected by main processing thread.
 	userDataAsyncCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+	globalPoseAsyncCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+	gpsAsyncCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 	landmarkCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 	imuCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 	rclcpp::SubscriptionOptions userDataAsyncSubOptions;
+	rclcpp::SubscriptionOptions globalPoseAsyncSubOptions;
+	rclcpp::SubscriptionOptions gpsAsyncSubOptions;
 	rclcpp::SubscriptionOptions landmarkSubOptions;
 	rclcpp::SubscriptionOptions imuSubOptions;
 	userDataAsyncSubOptions.callback_group = userDataAsyncCallbackGroup_;
+	globalPoseAsyncSubOptions.callback_group = globalPoseAsyncCallbackGroup_;
+	gpsAsyncSubOptions.callback_group = gpsAsyncCallbackGroup_;
 	landmarkSubOptions.callback_group = imuCallbackGroup_;
 	imuSubOptions.callback_group = imuCallbackGroup_;
 
@@ -858,8 +863,8 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	qosGPS = this->declare_parameter("qos_gps", qosGPS);
 	qosIMU = this->declare_parameter("qos_imu", qosIMU);
 	userDataAsyncSub_ = this->create_subscription<rtabmap_msgs::msg::UserData>("user_data_async", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qosUserData_), std::bind(&CoreWrapper::userDataAsyncCallback, this, std::placeholders::_1), userDataAsyncSubOptions);
-	globalPoseAsyncSub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("global_pose", 1, std::bind(&CoreWrapper::globalPoseAsyncCallback, this, std::placeholders::_1), subOptions);
-	gpsFixAsyncSub_ = this->create_subscription<sensor_msgs::msg::NavSatFix>("gps/fix", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qosGPS), std::bind(&CoreWrapper::gpsFixAsyncCallback, this, std::placeholders::_1), subOptions);
+	globalPoseAsyncSub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("global_pose", 1, std::bind(&CoreWrapper::globalPoseAsyncCallback, this, std::placeholders::_1), globalPoseAsyncSubOptions);
+	gpsFixAsyncSub_ = this->create_subscription<sensor_msgs::msg::NavSatFix>("gps/fix", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qosGPS), std::bind(&CoreWrapper::gpsFixAsyncCallback, this, std::placeholders::_1), gpsAsyncSubOptions);
 	landmarkDetectionSub_ = this->create_subscription<rtabmap_msgs::msg::LandmarkDetection>("landmark_detection", 1, std::bind(&CoreWrapper::landmarkDetectionAsyncCallback, this, std::placeholders::_1), landmarkSubOptions);
 	landmarkDetectionsSub_ = this->create_subscription<rtabmap_msgs::msg::LandmarkDetections>("landmark_detections", 1, std::bind(&CoreWrapper::landmarkDetectionsAsyncCallback, this, std::placeholders::_1), landmarkSubOptions);
 #ifdef WITH_APRILTAG_MSGS
@@ -924,7 +929,10 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 						RCLCPP_INFO(this->get_logger(), "RTAB-Map rate detection = %f Hz", rate_);
 					}
 					rtabmap_.parseParameters(parameters_);
-					mapsManager_.setParameters(parameters_);
+					// Don't reset map in localization mode
+					if(rtabmap_.getMemory()->isIncremental()) {
+						mapsManager_.setParameters(parameters_);
+					}
 				}
 			};
 
@@ -2058,18 +2066,40 @@ void CoreWrapper::process(
 		data.setGroundTruth(groundTruthPose);
 
 		//global pose
-		if(globalPose_.header.stamp.sec != 0 || globalPose_.header.stamp.nanosec != 0)
+		geometry_msgs::msg::PoseWithCovarianceStamped globalPoseMsg;
+		globalPoseMsg.header.stamp = rclcpp::Time(0);
+		{
+			UScopeMutex lock(globalPoseMutex_);
+			if(!globalPoses_.empty())
+			{
+				auto iter = rtabmap_conversions::getClosestIterator<double, geometry_msgs::msg::PoseWithCovarianceStamped>(globalPoses_, data.stamp());
+				// Check if it is not too old
+				if(rate_ == 0 || fabs(iter->first - data.stamp()) < 1.0/rate_)
+				{
+					globalPoseMsg = iter->second;
+				}
+				else
+				{
+					RCLCPP_WARN(this->get_logger(), "Ignoring global pose with stamp %f because it should be inside the update period (%f) of the current data stamp (%f).",
+						iter->first,
+						1.0/rate_,
+						data.stamp());
+				}
+				globalPoses_.clear();
+			}
+		}
+		if(globalPoseMsg.header.stamp.sec != 0 || globalPoseMsg.header.stamp.nanosec != 0)
 		{
 			// assume sensor is fixed
 			Transform sensorToBase = rtabmap_conversions::getTransform(
-					globalPose_.header.frame_id,
+					globalPoseMsg.header.frame_id,
 					frameId_,
 					stamp,
 					*tfBuffer_,
 					waitForTransform_);
 			if(!sensorToBase.isNull())
 			{
-				Transform globalPose = rtabmap_conversions::transformFromPoseMsg(globalPose_.pose.pose);
+				Transform globalPose = rtabmap_conversions::transformFromPoseMsg(globalPoseMsg.pose.pose);
 				globalPose *= sensorToBase; // transform global pose from sensor frame to robot base frame
 
 				// Correction of the global pose accounting the odometry movement since we received it
@@ -2077,7 +2107,7 @@ void CoreWrapper::process(
 						frameId_,
 						odomFrameId,
 						stamp,
-						rclcpp::Time(globalPose_.header.stamp.sec, globalPose_.header.stamp.nanosec),
+						rclcpp::Time(globalPoseMsg.header.stamp.sec, globalPoseMsg.header.stamp.nanosec),
 						*tfBuffer_,
 						waitForTransform_);
 				if(!correction.isNull())
@@ -2090,17 +2120,32 @@ void CoreWrapper::process(
 							"If odometry is small since it received the global pose and "
 							"covariance is large, this should not be a problem.");
 				}
-				cv::Mat globalPoseCovariance = cv::Mat(6,6, CV_64FC1, (void*)globalPose_.pose.covariance.data()).clone();
+				cv::Mat globalPoseCovariance = cv::Mat(6,6, CV_64FC1, (void*)globalPoseMsg.pose.covariance.data()).clone();
 				data.setGlobalPose(globalPose, globalPoseCovariance);
 			}
 		}
-		globalPose_.header.stamp = rclcpp::Time(0);
 
-		if(gps_.stamp() > 0.0)
 		{
-			data.setGPS(gps_);
+			UScopeMutex lock(gpsMutex_);
+			if(!gps_.empty())
+			{
+				std::map<double, rtabmap::GPS>::const_iterator iter = rtabmap_conversions::getClosestIterator<double, rtabmap::GPS>(gps_, data.stamp());
+				// Check if it is not too old
+				if(rate_ == 0 || fabs(iter->first - data.stamp()) < 1.0/rate_)
+				{
+					data.setGPS(iter->second);
+				}
+				else
+				{
+					RCLCPP_WARN(this->get_logger(), "Ignoring GPS with stamp %f because it should be inside the update period (%f) of the current data stamp (%f).",
+						iter->first,
+						1.0/rate_,
+						data.stamp());
+				}
+				gps_.clear();
+			}
 		}
-		gps_ = rtabmap::GPS();
+		
 
 		//tag detections
 		landmarksMutex_.lock();
@@ -2519,7 +2564,12 @@ void CoreWrapper::globalPoseAsyncCallback(const geometry_msgs::msg::PoseWithCova
 {
 	if(!paused_)
 	{
-		globalPose_ = *globalPoseMsg;
+		UScopeMutex lock(globalPoseMutex_);
+		globalPoses_.insert(std::make_pair(rtabmap_conversions::timestampFromROS(globalPoseMsg->header.stamp), *globalPoseMsg));
+		if(globalPoses_.size() > 1000)
+		{
+			globalPoses_.erase(globalPoses_.begin());
+		}
 	}
 }
 
@@ -2536,13 +2586,21 @@ void CoreWrapper::gpsFixAsyncCallback(const sensor_msgs::msg::NavSatFix::SharedP
 				error = sqrt(variance);
 			}
 		}
-		gps_ = rtabmap::GPS(
-				rtabmap_conversions::timestampFromROS(gpsFixMsg->header.stamp),
-				gpsFixMsg->longitude,
-				gpsFixMsg->latitude,
-				gpsFixMsg->altitude,
-				error,
-				0);
+
+		rtabmap::GPS gps(
+			rtabmap_conversions::timestampFromROS(gpsFixMsg->header.stamp),
+			gpsFixMsg->longitude,
+			gpsFixMsg->latitude,
+			gpsFixMsg->altitude,
+			error,
+			0);
+
+		UScopeMutex lock(gpsMutex_);
+		gps_.insert(std::make_pair(gps.stamp(), gps));
+		if(gps_.size() > 1000)
+		{
+			gps_.erase(gps_.begin());
+		}
 	}
 }
 
@@ -2695,14 +2753,41 @@ void CoreWrapper::interOdomInfoCallback(const nav_msgs::msg::Odometry::ConstShar
 
 void CoreWrapper::initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
 {
-	Transform intialPose = rtabmap_conversions::transformFromPoseMsg(msg->pose.pose);
-	if(intialPose.isNull())
+	Transform mapToPose = Transform::getIdentity();
+	if(msg->header.frame_id.empty())
 	{
-		RCLCPP_ERROR(this->get_logger(), "Pose received is null!");
-		return;
+		RCLCPP_WARN(this->get_logger(), "Received initialpose doesn't have frame_id set, assuming it is in %s frame.", mapFrameId_.c_str());
+	}
+	else if(msg->header.frame_id != mapFrameId_)
+	{
+		mapToPose = rtabmap_conversions::getTransform(mapFrameId_, msg->header.frame_id, msg->header.stamp, *tfBuffer_, waitForTransform_);
+		if(mapToPose.isNull())
+		{
+			RCLCPP_ERROR(this->get_logger(), "Failed to transform initialpose from frame %s to map frame %s", msg->header.frame_id.c_str(), mapFrameId_.c_str());
+			return;
+		}
 	}
 
-	rtabmap_.setInitialPose(intialPose);
+	Transform initialPose = rtabmap_conversions::transformFromPoseMsg(msg->pose.pose);
+	if(initialPose.isNull())
+	{
+		RCLCPP_ERROR(this->get_logger(), "initialpose received is null!");
+		return;
+	}
+	if(mapToPose.isIdentity())
+	{
+		RCLCPP_INFO(this->get_logger(), "initialpose received: %s", initialPose.prettyPrint().c_str());
+		rtabmap_.setInitialPose(initialPose);
+	}
+	else
+	{
+		RCLCPP_INFO(this->get_logger(), "initialpose received: %s in %s frame, transformed to %s in %s frame.",
+			initialPose.prettyPrint().c_str(),
+			msg->header.frame_id.c_str(),
+			(mapToPose * initialPose).prettyPrint().c_str(),
+			mapFrameId_.c_str());
+		rtabmap_.setInitialPose(mapToPose*initialPose);
+	}
 }
 
 void CoreWrapper::goalCommonCallback(
@@ -2946,7 +3031,10 @@ void CoreWrapper::updateRtabmapCallback(
 		RCLCPP_INFO(get_logger(), "2D mapping = %s", twoDMapping_?"true":"false");
 	}
 	rtabmap_.parseParameters(parameters_);
-	mapsManager_.setParameters(parameters_);
+	// Don't reset map in localization mode
+	if(rtabmap_.getMemory()->isIncremental()) {
+		mapsManager_.setParameters(parameters_);
+	}
 }
 
 void CoreWrapper::resetRtabmapCallback(
@@ -2972,8 +3060,8 @@ void CoreWrapper::resetRtabmapCallback(
 	graphLatched_ = false;
 	mapsManager_.clear();
 	previousStamp_ = rclcpp::Time(0);
-	globalPose_.header.stamp = rclcpp::Time(0);
-	gps_ = rtabmap::GPS();
+	globalPoses_.clear();
+	gps_.clear();
 	landmarksMutex_.lock();
 	landmarks_.clear();
 	landmarksMutex_.unlock();
@@ -3076,8 +3164,8 @@ void CoreWrapper::loadDatabaseCallback(
 	graphLatched_ = false;
 	mapsManager_.clear();
 	previousStamp_ = rclcpp::Time(0);
-	globalPose_.header.stamp = rclcpp::Time(0);
-	gps_ = rtabmap::GPS();
+	globalPoses_.clear();
+	gps_.clear();
 	landmarksMutex_.lock();
 	landmarks_.clear();
 	landmarksMutex_.unlock();
@@ -3212,8 +3300,8 @@ void CoreWrapper::backupDatabaseCallback(
 	userDataMutex_.lock();
 	userData_ = cv::Mat();
 	userDataMutex_.unlock();
-	globalPose_.header.stamp = rclcpp::Time(0);
-	gps_ = rtabmap::GPS();
+	globalPoses_.clear();
+	gps_.clear();
 	landmarksMutex_.lock();
 	landmarks_.clear();
 	landmarksMutex_.unlock();
