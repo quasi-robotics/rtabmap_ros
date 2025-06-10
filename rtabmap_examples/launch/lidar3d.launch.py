@@ -32,7 +32,9 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
   imu_used =  imu_topic.perform(context) != ''
   
   rgbd_image_topic = LaunchConfiguration('rgbd_image_topic')
-  rgbd_image_used =  rgbd_image_topic.perform(context) != ''
+  rgbd_images_topic = LaunchConfiguration('rgbd_images_topic')
+  rgbd_image_used =  rgbd_image_topic.perform(context) != '' or rgbd_images_topic.perform(context) != ''
+  rgbd_cameras = 0 if rgbd_images_topic.perform(context) != '' else 1
   
   voxel_size = LaunchConfiguration('voxel_size')
   voxel_size_value = float(voxel_size.perform(context))
@@ -46,6 +48,9 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
   localization = LaunchConfiguration('localization').perform(context)
   localization = localization == 'true' or localization == 'True'
   
+  deskewing = LaunchConfiguration('deskewing').perform(context)
+  deskewing = deskewing == 'true' or deskewing == 'True'
+  
   deskewing_slerp = LaunchConfiguration('deskewing_slerp').perform(context)
   deskewing_slerp = deskewing_slerp == 'true' or deskewing_slerp == 'True'
   
@@ -55,7 +60,7 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
     fixed_frame_from_imu = True
     fixed_frame_id = frame_id.perform(context) + "_stabilized"
   
-  if not fixed_frame_id:
+  if not fixed_frame_id or not deskewing:
     lidar_topic_deskewed = lidar_topic
   
   # Rule of thumb:
@@ -82,7 +87,7 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
   
   icp_odometry_parameters = {
     'expected_update_rate': LaunchConfiguration('expected_update_rate'),
-    'deskewing': not fixed_frame_id, # If fixed_frame_id is set, we do deskewing externally below
+    'deskewing': not fixed_frame_id and deskewing, # If fixed_frame_id is set, we do deskewing externally below
     'odom_frame_id': 'icp_odom',
     'guess_frame_id': fixed_frame_id,
     'deskewing_slerp': deskewing_slerp,
@@ -101,6 +106,8 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
     'subscribe_rgb': False,
     'subscribe_odom_info': True,
     'subscribe_scan_cloud': True,
+    'map_frame_id': 'new_map',
+    'odom_sensor_sync': True, # This will adjust camera position based on difference between lidar and camera stamps.
     # RTAB-Map's internal parameters are strings:
     'RGBD/ProximityMaxGraphDepth': '0',
     'RGBD/ProximityPathMaxNeighbors': '1',
@@ -110,7 +117,7 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
     'Mem/NotLinkedNodesKept': 'false',
     'Mem/STMSize': '30',
     'Reg/Strategy': '1',
-    'Icp/CorrespondenceRatio': LaunchConfiguration('min_loop_closure_overlap')
+    'Icp/CorrespondenceRatio': str(LaunchConfiguration('min_loop_closure_overlap').perform(context))
   }
   
   arguments = []
@@ -126,7 +133,10 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
   else:
     remappings.append(('imu', 'imu_not_used'))
   if rgbd_image_used:
-    remappings.append(('rgbd_image', LaunchConfiguration('rgbd_image_topic')))
+    if rgbd_cameras == 1:
+      remappings.append(('rgbd_image', LaunchConfiguration('rgbd_image_topic')))
+    else:
+      remappings.append(('rgbd_images', LaunchConfiguration('rgbd_images_topic')))
   
   nodes = [
     Node(
@@ -136,7 +146,9 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
     
     Node(
       package='rtabmap_slam', executable='rtabmap', output='screen',
-      parameters=[shared_parameters, rtabmap_parameters, {'subscribe_rgbd': rgbd_image_used}],
+      parameters=[shared_parameters, rtabmap_parameters, 
+                  {'subscribe_rgbd': rgbd_image_used, 
+                   'rgbd_cameras': rgbd_cameras}],
       remappings=remappings + [('scan_cloud', lidar_topic_deskewed)],
       arguments=arguments), 
   
@@ -158,7 +170,7 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
           'wait_for_transform_duration': 0.001}],
         remappings=[('imu/data', imu_topic)]))
 
-  if fixed_frame_id:
+  if fixed_frame_id and deskewing:
     # Lidar deskewing
     nodes.append(
       Node(
@@ -210,6 +222,10 @@ def generate_launch_description():
     DeclareLaunchArgument(
       'rgbd_image_topic', default_value='',
       description='RGBD image topic (ignored if empty). Would be the output of a rtabmap_sync\'s rgbd_sync, stereo_sync or rgb_sync node.'),
+    
+    DeclareLaunchArgument(
+      'rgbd_images_topic', default_value='',
+      description='RGBD images topic (ignored if empty, override "rgbd_image_topic" if set). Would be the output of a rtabmap_sync\'s rgbdx_sync node.'),
     
     DeclareLaunchArgument(
       'expected_update_rate', default_value='15.0',
