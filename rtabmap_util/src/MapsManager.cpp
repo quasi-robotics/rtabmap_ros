@@ -1275,7 +1275,7 @@ void MapsManager::publishMaps(
 			// create the grid map
 			float xMin=0.0f, yMin=0.0f, gridCellSize = 0.05f;
 			cv::Mat pixels = this->getGridProbMap(xMin, yMin, gridCellSize);
-			if(!pixels.empty())
+			// if(!pixels.empty())
 			{
 				//init
 				nav_msgs::msg::OccupancyGrid map;
@@ -1305,10 +1305,10 @@ void MapsManager::publishMaps(
 					latched_.at(&gridProbMapPub_) = true;
 				}
 			}
-			else if(poses.size())
-			{
-				UWARN("Grid map is empty! (local maps=%ld)", localMaps_.size());
-			}
+			// else if(poses.size())
+			// {
+			// 	UWARN("Grid map is empty! (local maps=%ld)", localMaps_.size());
+			// }
 		}
 		if(gridMapPub_->get_subscription_count())
 		{
@@ -1316,7 +1316,7 @@ void MapsManager::publishMaps(
 			float xMin=0.0f, yMin=0.0f, gridCellSize = 0.05f;
 			cv::Mat pixels = this->getGridMap(xMin, yMin, gridCellSize);
 
-			if(!pixels.empty())
+			// if(!pixels.empty())
 			{
 				//init
 				nav_msgs::msg::OccupancyGrid map;
@@ -1343,10 +1343,10 @@ void MapsManager::publishMaps(
 				gridMapPub_->publish(map);
 				latched_.at(&gridMapPub_) = true;
 			}
-			else if(poses.size())
-			{
-				UWARN("Grid map is empty! (local maps=%ld)", localMaps_.size());
-			}
+			// else if(poses.size())
+			// {
+			// 	UWARN("Grid map is empty! (local maps=%ld)", localMaps_.size());
+			// }
 		}
 	}
 
