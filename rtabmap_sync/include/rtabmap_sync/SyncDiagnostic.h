@@ -26,10 +26,10 @@ namespace rtabmap_sync {
         inCompositeTask_("Input Status"),
         outCompositeTask_("Output Status"),
         lastTickInputStamp_(rtabmap_conversions::timestampFromROS(node_->now()) - 1),
-        lastTickOutputStamp_(rtabmap_conversions::timestampFromROS(node_->now()) - 1),
         inTargetFrequency_(0.0),
         outTargetFrequency_(0.0),
         windowSize_(windowSize),
+        lastTickTime_(0.0),
         paused_(paused) {
       UASSERT(windowSize_ >= 1);
     }
@@ -74,7 +74,8 @@ namespace rtabmap_sync {
     }
 
     void tickOutput(const rclcpp::Time &stamp, double expectedFrequency = 0) {
-      if(!paused_)
+      if(!paused_) {
+        double lastTickOutputStamp;
         updateFrequency(
             stamp,
             expectedFrequency,
@@ -82,7 +83,8 @@ namespace rtabmap_sync {
             outTimeStampStatus_,
             outWindow_,
             outTargetFrequency_,
-            lastTickOutputStamp_);
+            lastTickOutputStamp);
+      }
     }
 
     void pause() {
@@ -129,27 +131,44 @@ namespace rtabmap_sync {
       double singlePeriod = stampSec - lastTickStamp;
 
       window.push_back(singlePeriod);
-      if(window.size() > windowSize_) {
+      if(window.size() > windowSize_)
+      {
         window.pop_front();
 
         double period = 0.0;
-        if(window.size() == windowSize_) {
-          for(size_t i = 0; i < window.size(); ++i) {
+        if(window.size() == windowSize_)
+        {
+          for(size_t i=0; i<window.size(); ++i)
+          {
             period += window[i];
           }
           period /= windowSize_;
         }
 
-        if(period > 0.0 && expectedFrequency == 0 && (targetFrequency == 0.0 || period < 1.0 / targetFrequency)) {
-          targetFrequency = 1.0 / period;
+        if(period>0.0 && expectedFrequency == 0 && (targetFrequency == 0.0 || period < 1.0/targetFrequency))
+        {
+          targetFrequency = 1.0/period;
         }
-        else if(expectedFrequency > 0) {
+        else if(expectedFrequency>0)
+        {
           targetFrequency = expectedFrequency;
 
         }
       }
 
       lastTickStamp = stampSec;
+
+      double clockNow = rtabmap_conversions::timestampFromROS(node_->now());
+      if(lastTickTime_ > clockNow)
+      {
+        RCLCPP_WARN(node_->get_logger(), "%s: Detected time jump in the past of %f sec, forcing diagnostic update.",
+                    node_->get_name(), lastTickTime_ - clockNow);
+        inFrequencyStatus_.clear();
+        outFrequencyStatus_.clear();
+        diagnosticUpdater_.force_update();
+        lastTickInputStamp_ = clockNow;
+      }
+      lastTickTime_ = clockNow;
     }
 
   private:
@@ -164,7 +183,6 @@ namespace rtabmap_sync {
     diagnostic_updater::CompositeDiagnosticTask outCompositeTask_;
     rclcpp::TimerBase::SharedPtr diagnosticTimer_;
     double lastTickInputStamp_;
-    double lastTickOutputStamp_;
     double inTargetFrequency_;
     double outTargetFrequency_;
     int windowSize_;
@@ -172,6 +190,7 @@ namespace rtabmap_sync {
     std::deque<double> outWindow_;
     UMutex tickMutex_;
     bool paused_{false};
+    double lastTickTime_;
 
   };
 
