@@ -366,8 +366,8 @@ void RGBDOdometry::onOdomInit()
       		"depth/image", false, false
 		);
 
-    image_mono_sub_.subscribe(this, rgb_topic, rgb_hints.getTransport(), RCLCPP_QOS(topicQueueSize_, qosCam), options);
-    image_depth_sub_.subscribe(this, depth_topic, depth_hints.getTransport(), RCLCPP_QOS(topicQueueSize_, qosCam), options);
+    image_mono_sub_.subscribe(this, rgb_topic, rgb_hints.getTransport(), RCLCPP_QOS(topicQueueSize_, qosCam).get_rmw_qos_profile(), options);
+    image_depth_sub_.subscribe(this, depth_topic, depth_hints.getTransport(), RCLCPP_QOS(topicQueueSize_, qosCam).get_rmw_qos_profile(), options);
     info_sub_.subscribe(this, "rgb/camera_info", RCLCPP_QOS(topicQueueSize_, qosCamInfo), options);
 
 		if(approxSync)
