@@ -46,48 +46,61 @@ LidarDeskewing::~LidarDeskewing()
 
 void LidarDeskewing::callbackScan(const sensor_msgs::msg::LaserScan::ConstSharedPtr msg)
 {
-	// make sure the frame of the laser is updated during the whole scan time
-	rtabmap::Transform tmpT = rtabmap_conversions::getMovingTransform(
-			msg->header.frame_id,
-			fixedFrameId_,
-			msg->header.stamp,
-			rclcpp::Time(msg->header.stamp.sec, msg->header.stamp.nanosec) + rclcpp::Duration::from_seconds(msg->ranges.size()*msg->time_increment),
-			*tfBuffer_,
-			waitForTransformDuration_);
-	if(tmpT.isNull())
-	{
-		return;
-	}
-
-	sensor_msgs::msg::PointCloud2 scanOut;
-	laser_geometry::LaserProjection projection;
-  try {
-  	projection.transformLaserScanToPointCloud(fixedFrameId_, *msg, scanOut, *tfBuffer_);
+  if(scanSyncDiagnostic_.get() == 0) {
+    scanSyncDiagnostic_.reset(new rtabmap_sync::SyncDiagnostic(this, 0.5));
+    scanSyncDiagnostic_->init(subScan_->get_topic_name(),
+                              uFormat("%s: Did not receive data since 5 seconds! Make sure the input topic \"%s\" is "
+                                      "published (\"$ rostopic hz my_topic\") and the timestamps in their "
+                                      "header are set.",
+                                      this->get_name(),
+                                      subScan_->get_topic_name()));
   }
-  catch(const std::exception& ex) {
-    RCLCPP_ERROR(this->get_logger(), "Failed to transform laser scan to point cloud: %s", ex.what());
+  scanSyncDiagnostic_->tickInput(msg->header.stamp);
+  // make sure the frame of the laser is updated during the whole scan time
+  rtabmap::Transform tmpT = rtabmap_conversions::getMovingTransform(
+      msg->header.frame_id,
+      fixedFrameId_,
+      msg->header.stamp,
+      rclcpp::Time(msg->header.stamp.sec, msg->header.stamp.nanosec) + rclcpp::Duration::from_seconds(msg->ranges.size()*msg->time_increment),
+      *tfBuffer_,
+      waitForTransformDuration_);
+  if(tmpT.isNull())
+  {
     return;
   }
 
-	pubScan_->publish(scanOut);
-/*
-	rtabmap::Transform t = rtabmap_conversions::getTransform(msg->header.frame_id, scanOut.header.frame_id, msg->header.stamp, *tfBuffer_, waitForTransformDuration_);
-	if(t.isNull())
-	{
-		RCLCPP_ERROR(this->get_logger(), "Cannot transform back projected scan from \"%s\" frame to \"%s\" frame at time %fs.",
-				scanOut.header.frame_id.c_str(), msg->header.frame_id.c_str(), rtabmap_conversions::timestampFromROS(msg->header.stamp));
-		return;
-	}
+  sensor_msgs::msg::PointCloud2 scanOut;
+  laser_geometry::LaserProjection projection;
+  projection.transformLaserScanToPointCloud(fixedFrameId_, *msg, scanOut, *tfBuffer_);
 
-	sensor_msgs::msg::PointCloud2 scanOutDeskewed;
-	rtabmap_conversions::transformPointCloud(t.toEigen4f(), scanOut, scanOutDeskewed);
-	scanOutDeskewed.header.frame_id = msg->header.frame_id;
-	pubScan_->publish(scanOutDeskewed);
-*/
-}
+  rtabmap::Transform t = rtabmap_conversions::getTransform(msg->header.frame_id, scanOut.header.frame_id, msg->header.stamp, *tfBuffer_, waitForTransformDuration_);
+  if(t.isNull())
+  {
+    RCLCPP_ERROR(this->get_logger(), "Cannot transform back projected scan from \"%s\" frame to \"%s\" frame at time %fs.",
+                 scanOut.header.frame_id.c_str(), msg->header.frame_id.c_str(), rtabmap_conversions::timestampFromROS(msg->header.stamp));
+    return;
+  }
+
+  sensor_msgs::msg::PointCloud2 scanOutDeskewed;
+  rtabmap_conversions::transformPointCloud(t.toEigen4f(), scanOut, scanOutDeskewed);
+  scanOutDeskewed.header.frame_id = msg->header.frame_id;
+  pubScan_->publish(scanOutDeskewed);
+
+  scanSyncDiagnostic_->tickOutput(msg->header.stamp);}
 
 void LidarDeskewing::callbackCloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
+	if(cloudSyncDiagnostic_.get() == 0) {
+		cloudSyncDiagnostic_.reset(new rtabmap_sync::SyncDiagnostic(this, 0.5));
+		cloudSyncDiagnostic_->init(subCloud_->get_topic_name(),
+			uFormat("%s: Did not receive data since 5 seconds! Make sure the input topic \"%s\" is "
+						"published (\"$ rostopic hz my_topic\") and the timestamps in their "
+						"header are set.",
+						this->get_name(),
+						subCloud_->get_topic_name()));
+	}
+	cloudSyncDiagnostic_->tickInput(msg->header.stamp);
+
 	sensor_msgs::msg::PointCloud2 msgDeskewed;
 	if(rtabmap_conversions::deskew(*msg, msgDeskewed, fixedFrameId_, *tfBuffer_, waitForTransformDuration_, slerp_))
 	{
@@ -100,6 +113,7 @@ void LidarDeskewing::callbackCloud(const sensor_msgs::msg::PointCloud2::ConstSha
 		RCLCPP_WARN(this->get_logger(), "deskewing failed! returning possible skewed cloud!");
 		pubCloud_->publish(*msg);
 	}
+	cloudSyncDiagnostic_->tickOutput(msg->header.stamp);
 }
 
 }
