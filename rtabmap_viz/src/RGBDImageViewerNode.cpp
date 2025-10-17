@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2010-2016, Mathieu Labbe - IntRoLab - Universite de Sherbrooke
+Copyright (c) 2010-2025, Mathieu Labbe - IntRoLab - Universite de Sherbrooke
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,36 +25,59 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <rtabmap_util/visibility.h>
-#include "rclcpp/rclcpp.hpp"
+#include "rtabmap_viz/rgbd_image_viewer.hpp"
+#include "rtabmap/utilite/ULogger.h"
 
-#include <sensor_msgs/image_encodings.hpp>
+#include <QApplication>
+#include <rtabmap/gui/CameraViewer.h>
+#include <rtabmap/utilite/ULogger.h>
+#include <signal.h>
 
-#include <image_transport/image_transport.hpp>
+QApplication * app = 0;
 
-#include "rtabmap_msgs/msg/rgbd_image.hpp"
-
-namespace rtabmap_util
-{
-
-class RGBDSplit : public rclcpp::Node
-{
-public:
-	RTABMAP_UTIL_PUBLIC
-	explicit RGBDSplit(const rclcpp::NodeOptions & options);
-
-	virtual ~RGBDSplit() {}
-
-	void callback(const rtabmap_msgs::msg::RGBDImage::SharedPtr input) const;
-
-private:
-	rclcpp::Subscription<rtabmap_msgs::msg::RGBDImage>::SharedPtr rgbdImageSub_;
-
-	image_transport::Publisher rgbPub_;
-	image_transport::Publisher depthPub_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr rgbInfoPub_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr depthInfoPub_;
-};
-
+void my_handler(int){
+	app->exit(-1);
 }
 
+int main(int argc, char** argv)
+{
+	rclcpp::init(argc, argv);
+
+	app = new QApplication(argc, argv);
+	app->connect( app, SIGNAL( lastWindowClosed() ), app, SLOT( quit() ) );
+
+	int r;
+	{
+		auto node = std::make_shared<rclcpp::Node>("rgbd_image_viewer");
+		rtabmap::ParametersMap parameters = rtabmap::Parameters::parseArguments(argc, argv, true);
+		rtabmap_viz::RGBDImageViewer viewer(node, parameters);
+    	viewer.show();
+
+		// Catch ctrl-c to close the gui
+		// (Place this after QApplication's constructor)
+		struct sigaction sigIntHandler;
+		sigIntHandler.sa_handler = my_handler;
+		sigemptyset(&sigIntHandler.sa_mask);
+		sigIntHandler.sa_flags = 0;
+		sigaction(SIGINT, &sigIntHandler, NULL);
+
+		// Here start the ROS events loop
+		rclcpp::executors::SingleThreadedExecutor executor; //Use 1 thread
+		executor.add_node(node);
+		auto spin_executor = [&executor]() {
+			executor.spin();
+		  };
+
+		// Launch executer
+		std::thread execution_thread(spin_executor);
+
+		// Now wait for application to finish
+		r = app->exec();// MUST be called by the Main Thread
+
+		rclcpp::shutdown();
+		execution_thread.join();
+	}
+	delete app;
+
+	return r;
+}

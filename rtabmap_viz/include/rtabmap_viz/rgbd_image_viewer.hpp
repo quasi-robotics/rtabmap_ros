@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2010-2016, Mathieu Labbe - IntRoLab - Universite de Sherbrooke
+Copyright (c) 2010-2025, Mathieu Labbe - IntRoLab - Universite de Sherbrooke
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,36 +25,60 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <rtabmap_util/visibility.h>
-#include "rclcpp/rclcpp.hpp"
+#ifndef RGBDIMAGEVIEWER_H_
+#define RGBDIMAGEVIEWER_H_
 
-#include <sensor_msgs/image_encodings.hpp>
-
-#include <image_transport/image_transport.hpp>
-
+#include <rtabmap_viz/visibility.h>
+#include <rclcpp/rclcpp.hpp>
+#include <QMainWindow>
 #include "rtabmap_msgs/msg/rgbd_image.hpp"
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <rtabmap/core/Parameters.h>
+#include <rtabmap/utilite/UEventsSender.h>
 
-namespace rtabmap_util
+namespace rtabmap
 {
+	class CameraViewer;
+}
 
-class RGBDSplit : public rclcpp::Node
+class QComboBox;
+class QSpinBox;
+class QLabel;
+
+namespace rtabmap_viz {
+
+class RGBDImageViewer : public QMainWindow, public UEventsSender
 {
+    Q_OBJECT
+
 public:
-	RTABMAP_UTIL_PUBLIC
-	explicit RGBDSplit(const rclcpp::NodeOptions & options);
+	RTABMAP_VIZ_PUBLIC
+	explicit RGBDImageViewer(std::shared_ptr<rclcpp::Node> & node, const rtabmap::ParametersMap & parameters);
+	virtual ~RGBDImageViewer();
 
-	virtual ~RGBDSplit() {}
-
-	void callback(const rtabmap_msgs::msg::RGBDImage::SharedPtr input) const;
+private Q_SLOTS:
+    void updateTopicList();
+    void topicSelected(const QString & topicName);
 
 private:
-	rclcpp::Subscription<rtabmap_msgs::msg::RGBDImage>::SharedPtr rgbdImageSub_;
+	void callback(const rtabmap_msgs::msg::RGBDImage::ConstSharedPtr msg);
 
-	image_transport::Publisher rgbPub_;
-	image_transport::Publisher depthPub_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr rgbInfoPub_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr depthInfoPub_;
+private:
+  QComboBox * topicComboBox_;
+  QComboBox * frameComboBox_;
+  QSpinBox * spinBox_;
+  QLabel * warningLabel_;
+	rtabmap::CameraViewer * cameraView_;
+	rclcpp::Subscription<rtabmap_msgs::msg::RGBDImage>::SharedPtr rgbdImageSub_;
+  
+  std::shared_ptr<rclcpp::Node> node_;
+  std::shared_ptr<tf2_ros::Buffer> tfBuffer_;
+	std::shared_ptr<tf2_ros::TransformListener> tfListener_;
+
+  std::mutex mutex_;
 };
 
 }
 
+#endif /* RGBDIMAGEVIEWER_H_ */
