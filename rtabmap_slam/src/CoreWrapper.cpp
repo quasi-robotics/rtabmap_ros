@@ -232,20 +232,14 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	stereoToDepth_ = this->declare_parameter("stereo_to_depth", stereoToDepth_);
 	odomSensorSync_ = this->declare_parameter("odom_sensor_sync", odomSensorSync_);
 
-	RCLCPP_INFO(this->get_logger(), "rtabmap: frame_id      = %s", frameId_.c_str());
-	if(!odomFrameId_.empty())
-	{
-		RCLCPP_INFO(this->get_logger(), "rtabmap: odom_frame_id = %s", odomFrameId_.c_str());
-	}
-	if(!groundTruthFrameId_.empty())
-	{
-		RCLCPP_INFO(this->get_logger(), "rtabmap: ground_truth_frame_id = %s -> ground_truth_base_frame_id = %s",
-				groundTruthFrameId_.c_str(),
-				groundTruthBaseFrameId_.c_str());
-	}
-	RCLCPP_INFO(this->get_logger(), "rtabmap: map_frame_id  = %s", mapFrameId_.c_str());
+	RCLCPP_INFO(this->get_logger(), "rtabmap: frame_id      = \"%s\"", frameId_.c_str());
+	RCLCPP_INFO(this->get_logger(), "rtabmap: odom_frame_id = \"%s\"", odomFrameId_.c_str());
+	RCLCPP_INFO(this->get_logger(), "rtabmap: ground_truth_frame_id = \"%s\" -> ground_truth_base_frame_id = \"%s\"",
+			groundTruthFrameId_.c_str(),
+			groundTruthBaseFrameId_.c_str());
+	RCLCPP_INFO(this->get_logger(), "rtabmap: map_frame_id  = \"%s\"", mapFrameId_.c_str());
 	RCLCPP_INFO(this->get_logger(), "rtabmap: log_to_rosout_level  = %d", eventLevel);
-	RCLCPP_INFO(this->get_logger(), "rtabmap: initial_pose  = %s", initialPoseStr.c_str());
+	RCLCPP_INFO(this->get_logger(), "rtabmap: initial_pose  = \"%s\"", initialPoseStr.c_str());
 	RCLCPP_INFO(this->get_logger(), "rtabmap: use_action_for_goal  = %s", useActionForGoal_?"true":"false");
 	RCLCPP_INFO(this->get_logger(), "rtabmap: tf_delay      = %f", tfDelay);
 	RCLCPP_INFO(this->get_logger(), "rtabmap: tf_tolerance  = %f", tfTolerance);
@@ -839,6 +833,14 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 			rtabmap_.parseParameters(parameters_);
 		}
 	}
+	
+	if(!this->isSubscribedToOdom() && odomFrameId_.empty())
+	{
+		bool isRGBD = uStr2Bool(parameters_.at(Parameters::kRGBDEnabled()).c_str());
+		if(isRGBD) {
+			RCLCPP_ERROR(this->get_logger(), "\"subscribe_odom\" or \"odom_frame_id\" should be used when \"%s\" is enabled!", Parameters::kRGBDEnabled().c_str());
+		}
+	}
 
 	// Set initial pose if set
 	if(!initialPoseStr.empty())
@@ -869,24 +871,30 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	gpsAsyncCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 	landmarkCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 	imuCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+	envSensorAsyncCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 	rclcpp::SubscriptionOptions userDataAsyncSubOptions;
 	rclcpp::SubscriptionOptions globalPoseAsyncSubOptions;
 	rclcpp::SubscriptionOptions gpsAsyncSubOptions;
 	rclcpp::SubscriptionOptions landmarkSubOptions;
 	rclcpp::SubscriptionOptions imuSubOptions;
+	rclcpp::SubscriptionOptions envSensorAsyncSubOptions;
 	userDataAsyncSubOptions.callback_group = userDataAsyncCallbackGroup_;
 	globalPoseAsyncSubOptions.callback_group = globalPoseAsyncCallbackGroup_;
 	gpsAsyncSubOptions.callback_group = gpsAsyncCallbackGroup_;
 	landmarkSubOptions.callback_group = imuCallbackGroup_;
 	imuSubOptions.callback_group = imuCallbackGroup_;
+	envSensorAsyncSubOptions.callback_group = envSensorAsyncCallbackGroup_;
 
 	int qosGPS = RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT;
 	int qosIMU = RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT;
+	int qosEnvSensor = RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT;
 	qosGPS = this->declare_parameter("qos_gps", qosGPS);
 	qosIMU = this->declare_parameter("qos_imu", qosIMU);
+	qosEnvSensor = this->declare_parameter("qos_env_sensor", qosEnvSensor);
 	userDataAsyncSub_ = this->create_subscription<rtabmap_msgs::msg::UserData>("user_data_async", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qosUserData_), std::bind(&CoreWrapper::userDataAsyncCallback, this, std::placeholders::_1), userDataAsyncSubOptions);
 	globalPoseAsyncSub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("global_pose", 1, std::bind(&CoreWrapper::globalPoseAsyncCallback, this, std::placeholders::_1), globalPoseAsyncSubOptions);
 	gpsFixAsyncSub_ = this->create_subscription<sensor_msgs::msg::NavSatFix>("gps/fix", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qosGPS), std::bind(&CoreWrapper::gpsFixAsyncCallback, this, std::placeholders::_1), gpsAsyncSubOptions);
+	envSensorAsyncSub_ = this->create_subscription<rtabmap_msgs::msg::EnvSensor>("env_sensor", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qosEnvSensor), std::bind(&CoreWrapper::envSensorAsyncCallback, this, std::placeholders::_1), envSensorAsyncSubOptions);
 	landmarkDetectionSub_ = this->create_subscription<rtabmap_msgs::msg::LandmarkDetection>("landmark_detection", 1, std::bind(&CoreWrapper::landmarkDetectionAsyncCallback, this, std::placeholders::_1), landmarkSubOptions);
 	landmarkDetectionsSub_ = this->create_subscription<rtabmap_msgs::msg::LandmarkDetections>("landmark_detections", 1, std::bind(&CoreWrapper::landmarkDetectionsAsyncCallback, this, std::placeholders::_1), landmarkSubOptions);
 #ifdef WITH_APRILTAG_MSGS
@@ -1357,6 +1365,11 @@ void CoreWrapper::commonMultiCameraCallback(
 		mapToOdomMutex_.lock();
 		odomFrameId = odomFrameId_;
 		mapToOdomMutex_.unlock();
+		if(odomFrameId.empty())
+		{
+			RCLCPP_ERROR(this->get_logger(), "This callback cannot be used without \"subscribe_odom\" or \"odom_frame_id\" set.");
+			return;
+		}
 		if(!scan2dMsg.ranges.empty())
 		{
 			if(!odomTFUpdate(odomFrameId, scan2dMsg.header.stamp))
@@ -1743,6 +1756,11 @@ void CoreWrapper::commonLaserScanCallback(
 		mapToOdomMutex_.lock();
 		odomFrameId = odomFrameId_;
 		mapToOdomMutex_.unlock();
+		if(odomFrameId.empty())
+		{
+			RCLCPP_ERROR(this->get_logger(), "This callback cannot be used without \"subscribe_odom\" or \"odom_frame_id\" set.");
+			return;
+		}
 		if(!scan2dMsg.ranges.empty())
 		{
 			if(!odomTFUpdate(odomFrameId, scan2dMsg.header.stamp))
@@ -1952,6 +1970,11 @@ void CoreWrapper::commonSensorDataCallback(
 		mapToOdomMutex_.lock();
 		odomFrameId = odomFrameId_;
 		mapToOdomMutex_.unlock();
+		if(odomFrameId.empty())
+		{
+			RCLCPP_ERROR(this->get_logger(), "This callback cannot be used without \"subscribe_odom\" or \"odom_frame_id\" set.");
+			return;
+		}
 		if(!odomTFUpdate(odomFrameId, sensorDataMsg->header.stamp))
 		{
 			return;
@@ -2238,6 +2261,16 @@ void CoreWrapper::process(
 		if(!landmarks.empty())
 		{
 			data.setLandmarks(landmarks);
+		}
+
+		// Env sensors
+		{
+			UScopeMutex lock(envSensorMutex_);
+			if(!envSensors_.empty())
+			{
+				data.setEnvSensors(envSensors_);
+				envSensors_.clear();
+			}
 		}
 
 		// IMU
@@ -2676,6 +2709,17 @@ void CoreWrapper::gpsFixAsyncCallback(const sensor_msgs::msg::NavSatFix::SharedP
 		{
 			gps_.erase(gps_.begin());
 		}
+	}
+}
+
+void CoreWrapper::envSensorAsyncCallback(const rtabmap_msgs::msg::EnvSensor::SharedPtr envSensorMsg)
+{
+	if(!paused_)
+	{
+		// Can only insert one value for each type per node, keep the most recent
+		EnvSensor value = rtabmap_conversions::envSensorFromROS(*envSensorMsg);
+		UScopeMutex lock(envSensorMutex_);
+		uInsert(envSensors_, std::make_pair(value.type(), value));
 	}
 }
 
@@ -3236,6 +3280,9 @@ void CoreWrapper::resetRtabmapCallback(
 	userDataMutex_.lock();
 	userData_ = cv::Mat();
 	userDataMutex_.unlock();
+	envSensorMutex_.lock();
+	envSensors_.clear();
+	envSensorMutex_.unlock();
 	imuMutex_.lock();
 	imus_.clear();
 	imuFrameId_.clear();
@@ -3340,6 +3387,9 @@ void CoreWrapper::loadDatabaseCallback(
 	userDataMutex_.lock();
 	userData_ = cv::Mat();
 	userDataMutex_.unlock();
+	envSensorMutex_.lock();
+	envSensors_.clear();
+	envSensorMutex_.unlock();
 	imuMutex_.lock();
 	imus_.clear();
 	imuFrameId_.clear();
@@ -3488,6 +3538,9 @@ void CoreWrapper::backupDatabaseCallback(
 	userDataMutex_.unlock();
 	globalPoses_.clear();
 	gps_.clear();
+	envSensorMutex_.lock();
+	envSensors_.clear();
+	envSensorMutex_.unlock();
 	landmarksMutex_.lock();
 	landmarks_.clear();
 	landmarksMutex_.unlock();
