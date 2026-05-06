@@ -965,17 +965,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 							parameters_.at(key) = vStr;
 						}
 					}
-					RCLCPP_INFO(this->get_logger(), "rtabmap: Updating parameters");
-					if(parameters_.find(Parameters::kRtabmapDetectionRate()) != parameters_.end())
-					{
-						rate_ = uStr2Float(parameters_.at(Parameters::kRtabmapDetectionRate()));
-						RCLCPP_INFO(this->get_logger(), "RTAB-Map rate detection = %f Hz", rate_);
-					}
-					rtabmap_.parseParameters(parameters_);
-					// Don't reset map in localization mode
-					if(rtabmap_.getMemory()->isIncremental()) {
-						mapsManager_.setParameters(parameters_);
-					}
+					applyParameters();
 				}
 			};
 
@@ -2442,8 +2432,8 @@ void CoreWrapper::process(
 				if(rtabmap_.getMemory() == 0 ||
 					filteredPoses.size() == 0 ||
 					rtabmap_.getMemory()->getLastSignatureId() != filteredPoses.rbegin()->first ||
-					rtabmap_.getMemory()->getLastWorkingSignature() == 0 ||
-					rtabmap_.getMemory()->getLastWorkingSignature()->sensorData().gridCellSize() == 0 ||
+					rtabmap_.getMemory()->getLastWorkingSignature(false) == 0 ||
+					rtabmap_.getMemory()->getLastWorkingSignature(false)->sensorData().gridCellSize() == 0 ||
 					(!mapsManager_.getLocalMapMaker()->isGridFromDepth() && data.laserScanRaw().is2d())) // 2d laser scan would fill empty space for latest data
 				{
 					SensorData tmpData = data;
@@ -3220,6 +3210,11 @@ void CoreWrapper::updateRtabmapCallback(
 			}
 		}
 	}
+	applyParameters();
+}
+
+void CoreWrapper::applyParameters()
+{
 	RCLCPP_INFO(get_logger(), "rtabmap: Updating parameters");
 	if(parameters_.find(Parameters::kRtabmapDetectionRate()) != parameters_.end())
 	{
@@ -3853,9 +3848,9 @@ void CoreWrapper::getNodeDataCallback(
 			req->grid?"true":"false",
 			req->user_data?"true":"false");
 
-	if(req->ids.empty() && rtabmap_.getMemory() && rtabmap_.getMemory()->getLastWorkingSignature())
+	if(req->ids.empty() && rtabmap_.getMemory() && rtabmap_.getMemory()->getLastWorkingSignature(true))
 	{
-		req->ids.push_back(rtabmap_.getMemory()->getLastWorkingSignature()->id());
+		req->ids.push_back(rtabmap_.getMemory()->getLastWorkingSignature(true)->id());
 	}
 	for(size_t i=0; i<req->ids.size(); ++i)
 	{
@@ -3893,6 +3888,8 @@ void CoreWrapper::getMapDataCallback(
 			!req->graph_only,
 			!req->graph_only,
 			!req->graph_only,
+			!req->graph_only,
+			!req->graph_only,
 			!req->graph_only);
 
 	mapToOdomMutex_.lock();
@@ -3919,13 +3916,15 @@ void CoreWrapper::getMapData2Callback(
 		const std::shared_ptr<rtabmap_msgs::srv::GetMap2::Request> req,
 		std::shared_ptr<rtabmap_msgs::srv::GetMap2::Response> res)
 {
-	RCLCPP_INFO(get_logger(), "rtabmap: Getting map (global=%s optimized=%s with_images=%s with_scans=%s with_user_data=%s with_grids=%s)...",
+	RCLCPP_INFO(get_logger(), "rtabmap: Getting map (global=%s optimized=%s with_images=%s with_scans=%s with_user_data=%s with_grids=%s with_words=%s with_global_descriptors=%s)...",
 			req->global_map?"true":"false",
 			req->optimized?"true":"false",
 			req->with_images?"true":"false",
 			req->with_scans?"true":"false",
 			req->with_user_data?"true":"false",
-			req->with_grids?"true":"false");
+			req->with_grids?"true":"false",
+			req->with_words?"true":"false",
+			req->with_global_descriptors?"true":"false");
 	std::map<int, Signature> signatures;
 	std::map<int, Transform> poses;
 	std::multimap<int, rtabmap::Link> constraints;
