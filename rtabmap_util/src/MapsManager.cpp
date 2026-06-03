@@ -203,7 +203,7 @@ void parameterMoved(
 					 "rtabmap_ros to rtabmap library. Use "
 					 "parameter \"%s\" instead. The value \"%s\" is still "
 					 "copied to new parameter name.",
-//					 rosName.c_str(),
+					 rosName.c_str(),
 					 parameterName.c_str(),
 					 p.value_to_string().c_str());
 			parameters.insert(ParametersPair(parameterName, p.value_to_string()));
