@@ -50,6 +50,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/utilite/UThread.h>
 
 #include <boost/thread.hpp>
+#include <vector>
 
 #include "rtabmap_util/ULogToRosout.h"
 #include "rtabmap_sync/SyncDiagnostic.h"
@@ -106,6 +107,7 @@ private:
 
 	void callbackIMU(const sensor_msgs::msg::Imu::SharedPtr msg);
 	void reset(const rtabmap::Transform & pose = rtabmap::Transform::getIdentity());
+	double getCovarianceOverrideValue(const std::vector<double> & overrides, size_t index, double fallback) const;
 
 protected:
 	rclcpp::CallbackGroup::SharedPtr dataCallbackGroup_;
@@ -125,6 +127,10 @@ private:
 	double guessMinTime_;
 	double guessLinearVariance_;
 	double guessAngularVariance_;
+	std::vector<double> poseCovarianceDiagonalOverride_;
+	std::vector<double> twistCovarianceDiagonalOverride_;
+	bool useCurrentTimeForOdomPublish_;
+	double odomPublishTimestampOffsetSec_;
 	bool publishTf_;
 	double waitForTransform_;
 	bool publishNullWhenLost_;
@@ -210,6 +216,7 @@ private:
 		int droppedMsgs_;
 	};
 	OdomStatusTask statusDiagnostic_;
+	double syncFrequencyTolerance_;
 	std::unique_ptr<rtabmap_sync::SyncDiagnostic> syncDiagnostic_;
 };
 

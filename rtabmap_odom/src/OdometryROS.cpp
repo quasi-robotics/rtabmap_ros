@@ -78,6 +78,10 @@ OdometryROS::OdometryROS(const std::string & name, const rclcpp::NodeOptions & o
 	guessMinTime_(0.0),
 	guessLinearVariance_(0.001),
 	guessAngularVariance_(0.001),
+	poseCovarianceDiagonalOverride_(6, -1.0),
+	twistCovarianceDiagonalOverride_(6, -1.0),
+	useCurrentTimeForOdomPublish_(false),
+	odomPublishTimestampOffsetSec_(0.0),
 	publishTf_(true),
 	waitForTransform_(0.1), // 100 ms
 	publishNullWhenLost_(true),
@@ -107,7 +111,8 @@ OdometryROS::OdometryROS(const std::string & name, const rclcpp::NodeOptions & o
 	droppedMsgs_(0),
 	configPath_(),
 	initialPose_(Transform::getIdentity()),
-	ulogToRosout_(this)
+	ulogToRosout_(this),
+	syncFrequencyTolerance_(0.5)
 {
 	dataCallbackGroup_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
@@ -147,6 +152,22 @@ OdometryROS::OdometryROS(const std::string & name, const rclcpp::NodeOptions & o
 	guessMinTime_ = this->declare_parameter("guess_min_time", guessMinTime_);
 	guessLinearVariance_ = this->declare_parameter("guess_linear_variance", guessLinearVariance_);
 	guessAngularVariance_ = this->declare_parameter("guess_angular_variance", guessAngularVariance_);
+	useCurrentTimeForOdomPublish_ = this->declare_parameter("use_current_time_for_odom_publish", useCurrentTimeForOdomPublish_);
+	odomPublishTimestampOffsetSec_ = this->declare_parameter("odom_publish_timestamp_offset_sec", odomPublishTimestampOffsetSec_);
+
+	std::vector<double> defaultCovarianceDiagonal(6, -1.0);
+	poseCovarianceDiagonalOverride_ = this->declare_parameter("pose_covariance_diagonal", defaultCovarianceDiagonal);
+	twistCovarianceDiagonalOverride_ = this->declare_parameter("twist_covariance_diagonal", defaultCovarianceDiagonal);
+	if(poseCovarianceDiagonalOverride_.size() != 6)
+	{
+		RCLCPP_WARN(this->get_logger(), "Parameter pose_covariance_diagonal must contain 6 values; ignoring it.");
+		poseCovarianceDiagonalOverride_.assign(6, -1.0);
+	}
+	if(twistCovarianceDiagonalOverride_.size() != 6)
+	{
+		RCLCPP_WARN(this->get_logger(), "Parameter twist_covariance_diagonal must contain 6 values; ignoring it.");
+		twistCovarianceDiagonalOverride_.assign(6, -1.0);
+	}
 
 	expectedUpdateRate_ = this->declare_parameter("expected_update_rate", expectedUpdateRate_);
 	maxUpdateRate_ = this->declare_parameter("max_update_rate", maxUpdateRate_);
@@ -158,6 +179,8 @@ OdometryROS::OdometryROS(const std::string & name, const rclcpp::NodeOptions & o
 
 	waitIMUToinit_ = this->declare_parameter("wait_imu_to_init", waitIMUToinit_);
 	alwaysCheckImuTf_ = this->declare_parameter("always_check_imu_tf", alwaysCheckImuTf_);
+
+	syncFrequencyTolerance_ = this->declare_parameter("frequency_tolerance", syncFrequencyTolerance_);
 	
 
 	configPath_ = uReplaceChar(configPath_, '~', UDirectory::homeDir());
@@ -216,6 +239,7 @@ OdometryROS::OdometryROS(const std::string & name, const rclcpp::NodeOptions & o
 	RCLCPP_INFO(this->get_logger(), "Odometry: min_update_rate        = %f Hz", minUpdateRate_);
 	RCLCPP_INFO(this->get_logger(), "Odometry: wait_imu_to_init       = %s", waitIMUToinit_?"true":"false");
 	RCLCPP_INFO(this->get_logger(), "Odometry: always_check_imu_tf    = %s", alwaysCheckImuTf_?"true":"false");
+	RCLCPP_INFO(this->get_logger(), "Odometry: frequency_tolerance    = %f", syncFrequencyTolerance_);
 	RCLCPP_INFO(this->get_logger(), "Odometry: sensor_data_compression_format = %s", compressionImgFormat_.c_str());
 	RCLCPP_INFO(this->get_logger(), "Odometry: sensor_data_parallel_compression = %s", compressionParallelized_?"true":"false");
 }
@@ -224,6 +248,11 @@ OdometryROS::~OdometryROS()
 {
 	this->join(true);
 	delete odometry_;
+}
+
+double OdometryROS::getCovarianceOverrideValue(const std::vector<double> & overrides, size_t index, double fallback) const
+{
+	return overrides.size() > index && overrides[index] >= 0.0 ? overrides[index] : fallback;
 }
 
 void OdometryROS::init(bool stereoParams, bool visParams, bool icpParams)
@@ -404,7 +433,7 @@ void OdometryROS::init(bool stereoParams, bool visParams, bool icpParams)
 void OdometryROS::initDiagnosticMsg(const std::string & subscribedTopicsMsg, bool approxSync, const std::string & subscribedTopic)
 {
 	RCLCPP_INFO(this->get_logger(), "%s", subscribedTopicsMsg.c_str());
-	syncDiagnostic_.reset(new rtabmap_sync::SyncDiagnostic(this, 0.5));
+	syncDiagnostic_.reset(new rtabmap_sync::SyncDiagnostic(this, syncFrequencyTolerance_));
 
 	std::vector<diagnostic_updater::DiagnosticTask*> tasks;
 	tasks.push_back(&statusDiagnostic_);
@@ -546,7 +575,7 @@ void OdometryROS::processData()
 	
 		if((waitIMUToinit_ && !imuProcessed_) && odometry_->framesProcessed() == 0 && odometry_->getPose().isIdentity() && imus_.empty())
 		{
-			RCLCPP_WARN(this->get_logger(), "odometry: waiting imu (%s) to initialize orientation (wait_imu_to_init=true)", imuSub_->get_topic_name());
+			RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "odometry: waiting imu (%s) to initialize orientation (wait_imu_to_init=true)", imuSub_->get_topic_name());
 			return;
 		}
 
@@ -837,10 +866,13 @@ void OdometryROS::processData()
 		//*********************
 		// Update odometry
 		//*********************
+		rclcpp::Time publishStamp = useCurrentTimeForOdomPublish_ ? now() : rclcpp::Time(header.stamp);
+		publishStamp += rclcpp::Duration::from_seconds(odomPublishTimestampOffsetSec_);
+
 		geometry_msgs::msg::TransformStamped poseMsg;
 		poseMsg.child_frame_id = frameId_;
 		poseMsg.header.frame_id = odomFrameId_;
-		poseMsg.header.stamp = header.stamp;
+		poseMsg.header.stamp = publishStamp;
 		rtabmap_conversions::transformToGeometryMsg(pose, poseMsg.transform);
 
 		if(publishTf_)
@@ -851,7 +883,7 @@ void OdometryROS::processData()
 				geometry_msgs::msg::TransformStamped correctionMsg;
 				correctionMsg.child_frame_id = guessFrameId_;
 				correctionMsg.header.frame_id = odomFrameId_;
-				correctionMsg.header.stamp = header.stamp;
+				correctionMsg.header.stamp = publishStamp;
 				Transform correction = pose * guessCurrentPose.inverse();
 				rtabmap_conversions::transformToGeometryMsg(correction, correctionMsg.transform);
 
@@ -885,7 +917,7 @@ void OdometryROS::processData()
 		{
 			//next, we'll publish the odometry message over ROS
 			nav_msgs::msg::Odometry odom;
-			odom.header.stamp = header.stamp; // use corresponding time stamp to image
+			odom.header.stamp = publishStamp;
 			odom.header.frame_id = odomFrameId_;
 			odom.child_frame_id = frameId_;
 
@@ -897,12 +929,12 @@ void OdometryROS::processData()
 
 			//set covariance
 			// libviso2 uses approximately vel variance * 2
-			odom.pose.covariance.at(0) = info.reg.covariance.at<double>(0,0)*2;  // xx
-			odom.pose.covariance.at(7) = info.reg.covariance.at<double>(1,1)*2;  // yy
-			odom.pose.covariance.at(14) = info.reg.covariance.at<double>(2,2)*2; // zz
-			odom.pose.covariance.at(21) = info.reg.covariance.at<double>(3,3)*2; // rr
-			odom.pose.covariance.at(28) = info.reg.covariance.at<double>(4,4)*2; // pp
-			odom.pose.covariance.at(35) = info.reg.covariance.at<double>(5,5)*2; // yawyaw
+			odom.pose.covariance.at(0) = getCovarianceOverrideValue(poseCovarianceDiagonalOverride_, 0, info.reg.covariance.at<double>(0,0)*2);  // xx
+			odom.pose.covariance.at(7) = getCovarianceOverrideValue(poseCovarianceDiagonalOverride_, 1, info.reg.covariance.at<double>(1,1)*2);  // yy
+			odom.pose.covariance.at(14) = getCovarianceOverrideValue(poseCovarianceDiagonalOverride_, 2, info.reg.covariance.at<double>(2,2)*2); // zz
+			odom.pose.covariance.at(21) = getCovarianceOverrideValue(poseCovarianceDiagonalOverride_, 3, info.reg.covariance.at<double>(3,3)*2); // rr
+			odom.pose.covariance.at(28) = getCovarianceOverrideValue(poseCovarianceDiagonalOverride_, 4, info.reg.covariance.at<double>(4,4)*2); // pp
+			odom.pose.covariance.at(35) = getCovarianceOverrideValue(poseCovarianceDiagonalOverride_, 5, info.reg.covariance.at<double>(5,5)*2); // yawyaw
 
 			//set velocity
 			bool setTwist = !guessVelocity.isNull() || !odometry_->getVelocityGuess().isNull();
@@ -923,12 +955,12 @@ void OdometryROS::processData()
 				odom.twist.twist.angular.z = yaw;
 			}
 
-			odom.twist.covariance.at(0) = setTwist?info.reg.covariance.at<double>(0,0):BAD_COVARIANCE;  // xx
-			odom.twist.covariance.at(7) = setTwist?info.reg.covariance.at<double>(1,1):BAD_COVARIANCE;  // yy
-			odom.twist.covariance.at(14) = setTwist?info.reg.covariance.at<double>(2,2):BAD_COVARIANCE; // zz
-			odom.twist.covariance.at(21) = setTwist?info.reg.covariance.at<double>(3,3):BAD_COVARIANCE; // rr
-			odom.twist.covariance.at(28) = setTwist?info.reg.covariance.at<double>(4,4):BAD_COVARIANCE; // pp
-			odom.twist.covariance.at(35) = setTwist?info.reg.covariance.at<double>(5,5):BAD_COVARIANCE; // yawyaw
+			odom.twist.covariance.at(0) = setTwist?getCovarianceOverrideValue(twistCovarianceDiagonalOverride_, 0, info.reg.covariance.at<double>(0,0)):BAD_COVARIANCE;  // xx
+			odom.twist.covariance.at(7) = setTwist?getCovarianceOverrideValue(twistCovarianceDiagonalOverride_, 1, info.reg.covariance.at<double>(1,1)):BAD_COVARIANCE;  // yy
+			odom.twist.covariance.at(14) = setTwist?getCovarianceOverrideValue(twistCovarianceDiagonalOverride_, 2, info.reg.covariance.at<double>(2,2)):BAD_COVARIANCE; // zz
+			odom.twist.covariance.at(21) = setTwist?getCovarianceOverrideValue(twistCovarianceDiagonalOverride_, 3, info.reg.covariance.at<double>(3,3)):BAD_COVARIANCE; // rr
+			odom.twist.covariance.at(28) = setTwist?getCovarianceOverrideValue(twistCovarianceDiagonalOverride_, 4, info.reg.covariance.at<double>(4,4)):BAD_COVARIANCE; // pp
+			odom.twist.covariance.at(35) = setTwist?getCovarianceOverrideValue(twistCovarianceDiagonalOverride_, 5, info.reg.covariance.at<double>(5,5)):BAD_COVARIANCE; // yawyaw
 
 			//publish the message
 			if(setTwist || publishNullWhenLost_)
