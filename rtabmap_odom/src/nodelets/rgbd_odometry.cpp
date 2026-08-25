@@ -396,7 +396,9 @@ void RGBDOdometry::onOdomInit()
 				image_depth_sub_.getSubscriber().getTopic().c_str(),
 				info_sub_.getSubscriber()->get_topic_name());
 	}
-	initDiagnosticMsg(subscribedTopicsMsg, approxSync, subscribedTopic);
+
+  if(this->declare_parameter<bool>("enable_diagnostics", true))
+	  initDiagnosticMsg(subscribedTopicsMsg, approxSync, subscribedTopic);
 }
 
 void RGBDOdometry::updateParameters(ParametersMap & parameters)

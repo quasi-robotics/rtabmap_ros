@@ -112,10 +112,11 @@ void ICPOdometry::onOdomInit()
 
 	filtered_scan_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("odom_filtered_input_scan", rclcpp::QoS(1).reliability((rmw_qos_reliability_policy_t)qos()));
 
-	initDiagnosticMsg(uFormat("\n%s subscribed to %s and %s (make sure only one of this topic is published, otherwise remap one to a dummy topic name).",
-			get_name(),
-			scan_sub_->get_topic_name(),
-			cloud_sub_->get_topic_name()), true);
+  if(this->declare_parameter<bool>("enable_diagnostics", true))
+    initDiagnosticMsg(uFormat("\n%s subscribed to %s and %s (make sure only one of this topic is published, otherwise remap one to a dummy topic name).",
+        get_name(),
+        scan_sub_->get_topic_name(),
+        cloud_sub_->get_topic_name()), true);
 }
 
 void ICPOdometry::updateParameters(ParametersMap & parameters)
