@@ -159,7 +159,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 
 	tfBuffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
 	tfListener_ = std::make_shared<tf2_ros::TransformListener>(*tfBuffer_);
-	tfBroadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+	tfBroadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(*this);
 
 	bool publishTf = true;
 	std::string initialPoseStr;
@@ -769,10 +769,14 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 					  Parameters::kRGBDEnabled().c_str(),
 					  Parameters::kRGBDEnabled().c_str());
 		}
-		image_transport::TransportHints hints(this); // using "image_transport" parameter
 		std::string imageTopic = this->get_node_topics_interface()->resolve_topic_name("image"); // Humble/Jazzy don't resolve base topic, fixed by https://github.com/ros-perception/image_common/commit/ea7589ae8c1f7ecb83d6aab7b4c890c2d630d27a
+#ifdef PRE_ROS_LYRICAL
+		image_transport::TransportHints hints(this); // using "image_transport" parameter
 		defaultSub_ = image_transport::create_subscription(this, imageTopic, std::bind(&CoreWrapper::defaultCallback, this, std::placeholders::_1), hints.getTransport(), rclcpp::QoS(this->getTopicQueueSize()).reliability((rmw_qos_reliability_policy_t)qosImage_).get_rmw_qos_profile(), subOptions);
-
+#else
+		image_transport::TransportHints hints(*this); // using "image_transport" parameter
+		defaultSub_ = image_transport::create_subscription(*this, imageTopic, std::bind(&CoreWrapper::defaultCallback, this, std::placeholders::_1), hints.getTransport(), rclcpp::QoS(this->getTopicQueueSize()).reliability((rmw_qos_reliability_policy_t)qosImage_), subOptions);
+#endif
 
 		RCLCPP_INFO(this->get_logger(), "\n%s subscribed to:\n   %s", get_name(), defaultSub_.getTopic().c_str());
 	}
@@ -3741,10 +3745,10 @@ void CoreWrapper::globalBundleAdjustmentCallback(
 	UTimer timer;
 	int optimizer = (int)Optimizer::kTypeG2O; // g2o
 	int iterations = Parameters::defaultOptimizerIterations();
-	float pixelVariance = Parameters::defaultg2oPixelVariance();
+	float pixelVariance = Parameters::defaultOptimizerPixelVariance();
 	bool rematchFeatures = true;
 	Parameters::parse(parameters_, Parameters::kOptimizerIterations(), iterations);
-	Parameters::parse(parameters_, Parameters::kg2oPixelVariance(), pixelVariance);
+	Parameters::parse(parameters_, Parameters::kOptimizerPixelVariance(), pixelVariance);
 	if(req->type == 1.0f)
 	{
 		optimizer = (int)Optimizer::kTypeCVSBA;
