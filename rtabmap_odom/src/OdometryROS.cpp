@@ -526,7 +526,7 @@ void OdometryROS::processData(SensorData & data, const std_msgs::msg::Header & h
 		double estimatedPeriod = clockNow - lastReceivedTopicClock_;
 		double topicPeriod = rtabmap_conversions::timestampFromROS(header.stamp) - lastReceivedTopicStamp_;
 		if(estimatedPeriod>0.0 && topicPeriod>0.0 && estimatedPeriod < topicPeriod*0.5) {
-			RCLCPP_WARN(get_logger(), 
+			RCLCPP_DEBUG(get_logger(), 
 			"Dropping image/scan data with stamp %f (delay=%f). Something is wrong "
 			"because the clock difference with the previous topic received (%fs) is much lower than the "
 			"expected one (%fs) estimated from the topic stamps (previous stamp=%f). If you are processing "
