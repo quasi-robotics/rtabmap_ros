@@ -689,7 +689,7 @@ void OdometryROS::processData()
 		}
 		previousClockTime_ = clockNow;
 
-		if(previousStamp_ >= rtabmap_conversions::timestampFromROS(header.stamp))
+		if(previousStamp_ > rtabmap_conversions::timestampFromROS(header.stamp))
 		{
 			RCLCPP_WARN(this->get_logger(), "Odometry: Detected not valid consecutive stamps (previous=%fs new=%fs). "
 					"New stamp should be always greater than previous stamp. This new data is ignored.",
