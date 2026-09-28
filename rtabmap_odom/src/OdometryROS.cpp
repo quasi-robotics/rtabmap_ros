@@ -472,7 +472,7 @@ void OdometryROS::callbackIMU(const sensor_msgs::msg::Imu::SharedPtr msg)
 				rtabmap::Transform localTransform = rtabmap_conversions::getTransform(this->frameId(), msg->header.frame_id, msg->header.stamp, *tfBuffer_, waitForTransform_);
 				if(localTransform.isNull())
 				{
-					RCLCPP_WARN(this->get_logger(), "Dropping imu data! A valid TF between %s and %s is required to initialize IMU.",
+					RCLCPP_DEBUG(this->get_logger(), "Dropping imu data! A valid TF between %s and %s is required to initialize IMU.",
 						this->frameId().c_str(), msg->header.frame_id.c_str());
 					return;
 				}
@@ -482,7 +482,7 @@ void OdometryROS::callbackIMU(const sensor_msgs::msg::Imu::SharedPtr msg)
 
 			if(imus_.size() > 1000)
 			{
-				RCLCPP_WARN(this->get_logger(), "Dropping imu data!");
+				RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 10000, "Dropping imu data!");
 				imus_.erase(imus_.begin());
 			}
 		}
