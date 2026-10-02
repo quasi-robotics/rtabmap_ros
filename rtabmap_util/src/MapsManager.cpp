@@ -24,6 +24,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <rtabmap_conversions/PointCloudConversion.h>
 #include "rtabmap_util/MapsManager.h"
 
 #include <rtabmap/utilite/ULogger.h>
@@ -135,40 +136,47 @@ void MapsManager::init(rclcpp::Node & node, const std::string & name, bool)
 
 	// mapping topics
 	latched_.clear();
-	gridMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	// Intra-process communication doesn't support transient local durability: when latching,
+	// disable it on these publishers, otherwise keep the node's setting.
+	rclcpp::PublisherOptions pubOptions;
+	if(latching_)
+	{
+		pubOptions.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+	}
+	gridMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&gridMapPub_, false));
-	gridProbMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("grid_prob_map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	gridProbMapPub_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("grid_prob_map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&gridProbMapPub_, false));
-	cloudMapPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	cloudMapPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&cloudMapPub_, false));
-	cloudObstaclesPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_obstacles", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	cloudObstaclesPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_obstacles", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&cloudObstaclesPub_, false));
-	cloudGroundPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_ground", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	cloudGroundPub_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("cloud_ground", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&cloudGroundPub_, false));
 
 #ifdef RTABMAP_OCTOMAP
 #ifdef WITH_OCTOMAP_MSGS
-	octoMapPubBin_ = node.create_publisher<octomap_msgs::msg::Octomap>("octomap_binary", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	octoMapPubBin_ = node.create_publisher<octomap_msgs::msg::Octomap>("octomap_binary", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&octoMapPubBin_, false));
-	octoMapPubFull_ = node.create_publisher<octomap_msgs::msg::Octomap>("octomap_full", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	octoMapPubFull_ = node.create_publisher<octomap_msgs::msg::Octomap>("octomap_full", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&octoMapPubFull_, false));
 #endif
-	octoMapCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_occupied_space", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE)); // FIXME latching option in ROS2?
+	octoMapCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_occupied_space", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions); // FIXME latching option in ROS2?
 	latched_.insert(std::make_pair((void*)&octoMapCloud_, false));
-	octoMapFrontierCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_global_frontier_space", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	octoMapFrontierCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_global_frontier_space", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&octoMapFrontierCloud_, false));
-	octoMapObstacleCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_obstacles", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	octoMapObstacleCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_obstacles", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&octoMapObstacleCloud_, false));
-	octoMapGroundCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_ground", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	octoMapGroundCloud_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_ground", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&octoMapGroundCloud_, false));
-	octoMapEmptySpace_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_empty_space", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	octoMapEmptySpace_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("octomap_empty_space", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&octoMapEmptySpace_, false));
-	octoMapProj_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("octomap_grid", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	octoMapProj_ = node.create_publisher<nav_msgs::msg::OccupancyGrid>("octomap_grid", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&octoMapProj_, false));
 #endif
 
 #if defined(WITH_GRID_MAP_ROS) and defined(RTABMAP_GRIDMAP)
-	elevationMapPub_ = node.create_publisher<grid_map_msgs::msg::GridMap>("elevation_map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE));
+	elevationMapPub_ = node.create_publisher<grid_map_msgs::msg::GridMap>("elevation_map", rclcpp::QoS(1).reliable().durability(latching_?RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:RMW_QOS_POLICY_DURABILITY_VOLATILE), pubOptions);
 	latched_.insert(std::make_pair((void*)&elevationMapPub_, false));
 #endif
 }
@@ -274,6 +282,12 @@ void MapsManager::set2DMap(
 		const std::map<int, rtabmap::Transform> & poses,
 		const rtabmap::Memory * memory)
 {
+	if(!map.empty() && poses.empty())
+	{
+		UWARN("Ignoring the 2D map (%dx%d): no poses were given. Pass the poses of the "
+			  "nodes the map was assembled from.", map.cols, map.rows);
+		return;
+	}
 	occupancyGrid_->setMap(map, xMin, yMin, cellSize, poses);
 	//update cache in case the map should be updated
 	if(memory && 
@@ -1041,7 +1055,7 @@ void MapsManager::publishMaps(
 			if(cloudGroundPub_->get_subscription_count())
 			{
 				sensor_msgs::msg::PointCloud2::UniquePtr cloudMsg(new sensor_msgs::msg::PointCloud2);
-				pcl::toROSMsg(*assembledGround_, *cloudMsg);
+				rtabmap_conversions::toPointCloud2Msg(*assembledGround_, *cloudMsg);
 				cloudMsg->header.stamp = stamp;
 				cloudMsg->header.frame_id = mapFrameId;
 				cloudGroundPub_->publish(std::move(cloudMsg));
@@ -1050,7 +1064,7 @@ void MapsManager::publishMaps(
 			if(cloudObstaclesPub_->get_subscription_count())
 			{
 				sensor_msgs::msg::PointCloud2::UniquePtr cloudMsg(new sensor_msgs::msg::PointCloud2);
-				pcl::toROSMsg(*assembledObstacles_, *cloudMsg);
+				rtabmap_conversions::toPointCloud2Msg(*assembledObstacles_, *cloudMsg);
 				cloudMsg->header.stamp = stamp;
 				cloudMsg->header.frame_id = mapFrameId;
 				cloudObstaclesPub_->publish(std::move(cloudMsg));
@@ -1060,7 +1074,7 @@ void MapsManager::publishMaps(
 			{
 				pcl::PointCloud<pcl::PointXYZRGB> cloud = *assembledObstacles_ + *assembledGround_;
 				sensor_msgs::msg::PointCloud2::UniquePtr cloudMsg(new sensor_msgs::msg::PointCloud2);
-				pcl::toROSMsg(cloud, *cloudMsg);
+				rtabmap_conversions::toPointCloud2Msg(cloud, *cloudMsg);
 				cloudMsg->header.stamp = stamp;
 				cloudMsg->header.frame_id = mapFrameId;
 
@@ -1168,7 +1182,7 @@ void MapsManager::publishMaps(
 				pcl::PointCloud<pcl::PointXYZRGB> cloudOccupiedSpace;
 				pcl::IndicesPtr indices = util3d::concatenate(obstacleIndices, groundIndices);
 				pcl::copyPointCloud(*cloud, *indices, cloudOccupiedSpace);
-				pcl::toROSMsg(cloudOccupiedSpace, msg);
+				rtabmap_conversions::toPointCloud2Msg(cloudOccupiedSpace, msg);
 				msg.header.frame_id = mapFrameId;
 				msg.header.stamp = stamp;
 				octoMapCloud_->publish(msg);
@@ -1178,7 +1192,7 @@ void MapsManager::publishMaps(
 			{
 				pcl::PointCloud<pcl::PointXYZRGB> cloudFrontier;
 				pcl::copyPointCloud(*cloud, *frontierIndices, cloudFrontier);
-				pcl::toROSMsg(cloudFrontier, msg);
+				rtabmap_conversions::toPointCloud2Msg(cloudFrontier, msg);
 				msg.header.frame_id = mapFrameId;
 				msg.header.stamp = stamp;
 				octoMapFrontierCloud_->publish(msg);
@@ -1188,7 +1202,7 @@ void MapsManager::publishMaps(
 			{
 				pcl::PointCloud<pcl::PointXYZRGB> cloudObstacles;
 				pcl::copyPointCloud(*cloud, *obstacleIndices, cloudObstacles);
-				pcl::toROSMsg(cloudObstacles, msg);
+				rtabmap_conversions::toPointCloud2Msg(cloudObstacles, msg);
 				msg.header.frame_id = mapFrameId;
 				msg.header.stamp = stamp;
 				octoMapObstacleCloud_->publish(msg);
@@ -1198,7 +1212,7 @@ void MapsManager::publishMaps(
 			{
 				pcl::PointCloud<pcl::PointXYZRGB> cloudGround;
 				pcl::copyPointCloud(*cloud, *groundIndices, cloudGround);
-				pcl::toROSMsg(cloudGround, msg);
+				rtabmap_conversions::toPointCloud2Msg(cloudGround, msg);
 				msg.header.frame_id = mapFrameId;
 				msg.header.stamp = stamp;
 				octoMapGroundCloud_->publish(msg);
@@ -1208,7 +1222,7 @@ void MapsManager::publishMaps(
 			{
 				pcl::PointCloud<pcl::PointXYZRGB> cloudEmptySpace;
 				pcl::copyPointCloud(*cloud, *emptyIndices, cloudEmptySpace);
-				pcl::toROSMsg(cloudEmptySpace, msg);
+				rtabmap_conversions::toPointCloud2Msg(cloudEmptySpace, msg);
 				msg.header.frame_id = mapFrameId;
 				msg.header.stamp = stamp;
 				octoMapEmptySpace_->publish(msg);
@@ -1422,6 +1436,7 @@ void MapsManager::publishMaps(
 		msg->header.frame_id = mapFrameId;
 		msg->header.stamp = stamp;
 		elevationMapPub_->publish(std::move(msg));
+		latched_.at(&elevationMapPub_) = true;
 	}
 	if(elevationMapPub_->get_subscription_count() == 0)
 	{

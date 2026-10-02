@@ -46,28 +46,28 @@ LidarDeskewing::~LidarDeskewing()
 
 void LidarDeskewing::callbackScan(const sensor_msgs::msg::LaserScan::ConstSharedPtr msg)
 {
-  if(scanSyncDiagnostic_.get() == 0) {
-    scanSyncDiagnostic_.reset(new rtabmap_sync::SyncDiagnostic(this, 0.5));
-    scanSyncDiagnostic_->init(subScan_->get_topic_name(),
-                              uFormat("%s: Did not receive data since 5 seconds! Make sure the input topic \"%s\" is "
-                                      "published (\"$ rostopic hz my_topic\") and the timestamps in their "
-                                      "header are set.",
-                                      this->get_name(),
-                                      subScan_->get_topic_name()));
-  }
-  scanSyncDiagnostic_->tickInput(msg->header.stamp);
-  // make sure the frame of the laser is updated during the whole scan time
-  rtabmap::Transform tmpT = rtabmap_conversions::getMovingTransform(
-      msg->header.frame_id,
-      fixedFrameId_,
-      msg->header.stamp,
-      rclcpp::Time(msg->header.stamp.sec, msg->header.stamp.nanosec) + rclcpp::Duration::from_seconds(msg->ranges.size()*msg->time_increment),
-      *tfBuffer_,
-      waitForTransformDuration_);
-  if(tmpT.isNull())
-  {
-    return;
-  }
+	if(scanSyncDiagnostic_.get() == 0) {
+		scanSyncDiagnostic_.reset(new rtabmap_sync::SyncDiagnostic(this, 0.5));
+		scanSyncDiagnostic_->init(subScan_->get_topic_name(),
+			uFormat("%s: Did not receive data since 5 seconds! Make sure the input topic \"%s\" is "
+						"published (\"$ rostopic hz my_topic\") and the timestamps in their "
+						"header are set.",
+						this->get_name(),
+						subScan_->get_topic_name()));
+	}
+	scanSyncDiagnostic_->tickInput(msg->header.stamp);
+	// make sure the frame of the laser is updated during the whole scan time
+	rtabmap::Transform tmpT = rtabmap_conversions::getMovingTransform(
+			msg->header.frame_id,
+			fixedFrameId_,
+			msg->header.stamp,
+			rclcpp::Time(msg->header.stamp.sec, msg->header.stamp.nanosec) + rclcpp::Duration::from_seconds((msg->ranges.empty()?0:msg->ranges.size()-1)*msg->time_increment),
+			*tfBuffer_,
+			waitForTransformDuration_);
+	if(tmpT.isNull())
+	{
+		return;
+	}
 
   sensor_msgs::msg::PointCloud2 scanOut;
   laser_geometry::LaserProjection projection;
