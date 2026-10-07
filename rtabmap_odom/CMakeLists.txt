@@ -35,6 +35,7 @@ find_package(rtabmap_conversions REQUIRED)
 find_package(rtabmap_msgs REQUIRED)
 find_package(rtabmap_util REQUIRED)
 find_package(rtabmap_sync REQUIRED)
+find_package(backward_ros REQUIRED)
 
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include

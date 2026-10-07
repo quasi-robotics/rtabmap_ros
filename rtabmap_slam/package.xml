@@ -30,7 +30,8 @@
   <depend>aruco_msgs</depend>
   <depend>aruco_opencv_msgs</depend>
   <!-- depend>aruco_markers_msgs</depend --> <!-- binaries only available on humble -->
-  
+  <depend>backward_ros</depend>
+
   <depend>rtabmap_msgs</depend>
   <depend>rtabmap_util</depend>
   <depend>rtabmap_sync</depend>

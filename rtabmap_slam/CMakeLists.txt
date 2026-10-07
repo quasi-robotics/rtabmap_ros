@@ -35,6 +35,7 @@ find_package(visualization_msgs REQUIRED)
 find_package(rtabmap_msgs REQUIRED)
 find_package(rtabmap_util REQUIRED)
 find_package(rtabmap_sync REQUIRED)
+find_package(backward_ros REQUIRED)
 
 #optional
 find_package(apriltag_msgs)
