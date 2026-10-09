@@ -523,7 +523,7 @@ void OdometryROS::callbackIMU(const sensor_msgs::msg::Imu::SharedPtr msg)
 				rtabmap::Transform localTransform = rtabmap_conversions::getTransform(this->frameId(), msg->header.frame_id, msg->header.stamp, *tfBuffer_, waitForTransform_);
 				if(localTransform.isNull())
 				{
-					RCLCPP_WARN(this->get_logger(), "Dropping imu data! A valid TF between %s and %s is required to initialize IMU.",
+					RCLCPP_DEBUG(this->get_logger(), "Dropping imu data! A valid TF between %s and %s is required to initialize IMU.",
 						this->frameId().c_str(), msg->header.frame_id.c_str());
 					return;
 				}
@@ -533,7 +533,7 @@ void OdometryROS::callbackIMU(const sensor_msgs::msg::Imu::SharedPtr msg)
 
 			if(imus_.size() > 1000)
 			{
-				RCLCPP_WARN(this->get_logger(), "Dropping imu data!");
+				RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 10000, "Dropping imu data!");
 				imus_.erase(imus_.begin());
 			}
 		}
@@ -751,7 +751,7 @@ void OdometryROS::processData()
 		}
 		previousClockTime_ = clockNow;
 
-		if(previousStamp_ >= rtabmap_conversions::timestampFromROS(header.stamp))
+		if(previousStamp_ > rtabmap_conversions::timestampFromROS(header.stamp))
 		{
 			RCLCPP_WARN(this->get_logger(), "Odometry: Detected not valid consecutive stamps (previous=%fs new=%fs). "
 					"New stamp should be always greater than previous stamp. This new data is ignored.",
@@ -882,13 +882,13 @@ void OdometryROS::processData()
 	bool tooOldPreviousData = minUpdateRate_ > 0 && previousStamp_ > 0 && rtabmap_conversions::timestampFromROS(header.stamp)-previousStamp_ > 1.0/minUpdateRate_;
 	if(tooOldPreviousData)
 	{
-		RCLCPP_WARN(this->get_logger(), "Odometry lost! Odometry will be reset because last update "
+		RCLCPP_DEBUG(this->get_logger(), "Odometry lost! Odometry will be reset because last update "
 				"is %fs too old (>%fs, min_update_rate = %f Hz). Previous data stamp is %f while new data stamp is %f.",
 				rtabmap_conversions::timestampFromROS(header.stamp) - previousStamp_, 1.0/minUpdateRate_, minUpdateRate_, previousStamp_, rtabmap_conversions::timestampFromROS(header.stamp));
 
 		if(!guess_.isNull())
 		{
-			RCLCPP_WARN(this->get_logger(), "Odometry automatically reset based on latest guess available from TF (%s->%s, moved %s since got lost)!",
+			RCLCPP_DEBUG(this->get_logger(), "Odometry automatically reset based on latest guess available from TF (%s->%s, moved %s since got lost)!",
 					guessFrameId_.c_str(), frameId_.c_str(), guess_.prettyPrint().c_str());
 			odometry_->reset(odometry_->getPose() * guess_);
 			// Cleared because it has just been applied: the odometry now starts from a
@@ -904,12 +904,12 @@ void OdometryROS::processData()
 			Transform tfPose = rtabmap_conversions::getTransform(odomFrameId_, frameId_, header.stamp, *tfBuffer_, waitForTransform_);
 			if(tfPose.isNull())
 			{
-				RCLCPP_WARN(this->get_logger(), "Odometry automatically reset to latest computed pose!");
+				RCLCPP_DEBUG(this->get_logger(), "Odometry automatically reset to latest computed pose!");
 				odometry_->reset(odometry_->getPose());
 			}
 			else
 			{
-				RCLCPP_WARN(this->get_logger(), "Odometry automatically reset to latest odometry pose available from TF (%s->%s)!",
+				RCLCPP_DEBUG(this->get_logger(), "Odometry automatically reset to latest odometry pose available from TF (%s->%s)!",
 						odomFrameId_.c_str(), frameId_.c_str());
 				odometry_->reset(tfPose);
 			}
@@ -1257,14 +1257,14 @@ void OdometryROS::processData()
 	{
 		if(--resetCurrentCount_>0)
 		{
-			RCLCPP_WARN(this->get_logger(), "Odometry lost! Odometry will be reset after next %d consecutive unsuccessful odometry updates...", resetCurrentCount_);
+			RCLCPP_DEBUG(this->get_logger(), "Odometry lost! Odometry will be reset after next %d consecutive unsuccessful odometry updates...", resetCurrentCount_);
 		}
 
 		if(resetCurrentCount_ == 0)
 		{
 			if(!guess_.isNull())
 			{
-				RCLCPP_WARN(this->get_logger(), "Odometry automatically reset based on latest guess available from TF (%s->%s, moved %s since got lost)!",
+				RCLCPP_DEBUG(this->get_logger(), "Odometry automatically reset based on latest guess available from TF (%s->%s, moved %s since got lost)!",
 						guessFrameId_.c_str(), frameId_.c_str(), guess_.prettyPrint().c_str());
 				odometry_->reset(odometry_->getPose() * guess_);
 				guess_.setNull();
@@ -1275,7 +1275,7 @@ void OdometryROS::processData()
 				// pose already covers the motion since the last one. Going to TF for a
 				// fallback here would block for wait_for_transform on every lost frame and
 				// answer a question that has already been answered.
-				RCLCPP_WARN(this->get_logger(), "Odometry automatically reset, carrying the "
+				RCLCPP_DEBUG(this->get_logger(), "Odometry automatically reset, carrying the "
 						"latest guess from TF (%s->%s) that was already applied to the pose!",
 						guessFrameId_.c_str(), frameId_.c_str());
 				odometry_->reset(odometry_->getPose());
@@ -1286,12 +1286,12 @@ void OdometryROS::processData()
 				Transform tfPose = rtabmap_conversions::getTransform(odomFrameId_, frameId_, header.stamp, *tfBuffer_, waitForTransform_);
 				if(tfPose.isNull())
 				{
-					RCLCPP_WARN(this->get_logger(), "Odometry automatically reset to latest computed pose!");
+					RCLCPP_DEBUG(this->get_logger(), "Odometry automatically reset to latest computed pose!");
 					odometry_->reset(odometry_->getPose());
 				}
 				else
 				{
-					RCLCPP_WARN(this->get_logger(), "Odometry automatically reset to latest odometry pose available from TF (%s->%s)!",
+					RCLCPP_DEBUG(this->get_logger(), "Odometry automatically reset to latest odometry pose available from TF (%s->%s)!",
 							odomFrameId_.c_str(), frameId_.c_str());
 					odometry_->reset(tfPose);
 				}
