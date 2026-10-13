@@ -870,7 +870,7 @@ void OdometryROS::processData()
 		}
 		else
 		{
-			RCLCPP_ERROR(this->get_logger(), "\"guess_from_tf\" is true, but guess cannot be computed between frames \"%s\" -> \"%s\". Aborting odometry update...", guessFrameId_.c_str(), frameId_.c_str());
+			RCLCPP_ERROR_THROTTLE(this->get_logger(), *get_clock(), 10000, "\"guess_from_tf\" is true, but guess cannot be computed between frames \"%s\" -> \"%s\". Aborting odometry update...", guessFrameId_.c_str(), frameId_.c_str());
 			return;
 		}
 	}
