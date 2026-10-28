@@ -306,7 +306,8 @@ void ICPOdometry::callbackScan(const sensor_msgs::msg::LaserScan::SharedPtr scan
 			tfBuffer(), waitForTransform());
 	if(localScanTransform.isNull())
 	{
-		RCLCPP_ERROR(this->get_logger(), "TF of received laser scan topic at time %fs is not set, aborting odometry update.", rtabmap_conversions::timestampFromROS(scanMsg->header.stamp));
+		RCLCPP_ERROR_THROTTLE(this->get_logger(), *get_clock(), 10000, "TF of received laser scan topic (%s -> %s) at time %fs is not set, aborting odometry update.",
+                 scanMsg->header.frame_id.c_str(), this->frameId().c_str(), rtabmap_conversions::timestampFromROS(scanMsg->header.stamp));
 		return;
 	}
 
