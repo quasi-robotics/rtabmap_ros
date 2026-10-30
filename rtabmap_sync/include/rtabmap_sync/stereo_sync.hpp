@@ -70,7 +70,11 @@ public:
 			  const sensor_msgs::msg::CameraInfo::ConstSharedPtr cameraInfoRight);
 private:
 	double compressedRate_;
+	/// Format of the compressed color (and right) images: ".jpg" or ".png".
+	std::string imageCompressionFormat_ = ".jpg";
 	double approxSyncMaxInterval_;
+	/// Equalize the exposure of the left and right images before publishing them.
+	bool stereoExposureCompensation_ = false;
 	/// Stamp of the last compressed message published, for compressed_rate throttling.
 	/// Explicitly on the ROS clock: the default is the system clock, and rclcpp refuses
 	/// to compare two times that do not come from the same source.

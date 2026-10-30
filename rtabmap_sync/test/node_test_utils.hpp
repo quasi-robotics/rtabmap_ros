@@ -32,6 +32,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <rclcpp/rclcpp.hpp>
 
+#include <execinfo.h>
+#include <unistd.h>
+
+#include <csignal>
+
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -65,11 +70,38 @@ public:
 	}
 };
 
+/**
+ * @brief Prints the stack of a test binary that crashes, then crashes as it would have.
+ *
+ * A crash in CI shows only the return code otherwise (-11 for SIGSEGV), there being no
+ * debugger or core dump there. Library frames come with their function names; this
+ * binary's with an offset, for `addr2line -C -f -e <binary> <offset>`.
+ */
+inline void printStackOnCrash(int signal)
+{
+	void * frames[64];
+	const int count = ::backtrace(frames, 64);
+	const char header[] = "\n*** Crashed, stack trace:\n";
+	if(::write(STDERR_FILENO, header, sizeof(header) - 1) < 0) {}
+	::backtrace_symbols_fd(frames, count, STDERR_FILENO);
+	std::signal(signal, SIG_DFL);
+	std::raise(signal);
+}
+
 /// Registers RclcppEnvironment. Call once at file scope in each test binary.
 inline ::testing::Environment * registerRclcppEnvironment()
 {
-	static ::testing::Environment * const env =
-			::testing::AddGlobalTestEnvironment(new RclcppEnvironment);
+	static ::testing::Environment * const env = []() {
+		// backtrace() loads libgcc on its first call, which is not safe in a signal
+		// handler: done here.
+		void * frame;
+		::backtrace(&frame, 1);
+		for(int signal : {SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGABRT})
+		{
+			std::signal(signal, printStackOnCrash);
+		}
+		return ::testing::AddGlobalTestEnvironment(new RclcppEnvironment);
+	}();
 	return env;
 }
 
@@ -183,16 +215,31 @@ protected:
 		const MsgT & front() const { return *messages.front(); }
 	};
 
-	/// Subscribes the helper node to @p topic and records everything it receives.
+	/**
+	 * @brief Subscribes the helper node to @p topic and records everything it receives.
+	 *
+	 * The callback holds the collector weakly. Capturing it by shared_ptr would close a
+	 * cycle -- collector owns the subscription, the subscription owns the callback, the
+	 * callback owns the collector -- and neither would ever be freed. A subscription that
+	 * outlives its test keeps the helper node's rcl handle alive with it, which leaves the
+	 * node's rosout publisher registered and greets the next test with "Publisher already
+	 * registered for node name: 'rtabmap_sync_test_helper'". It also keeps the rcl context
+	 * alive past main(), so the middleware's threads can still be running when its
+	 * library is unloaded at exit, crashing a binary whose tests all passed.
+	 */
 	template <typename MsgT>
-	std::shared_ptr<Collector<MsgT>> collect(
+	[[nodiscard]] std::shared_ptr<Collector<MsgT>> collect(
 			const std::string & topic, const rclcpp::QoS & qos = rclcpp::QoS(10))
 	{
 		std::shared_ptr<Collector<MsgT>> collector = std::make_shared<Collector<MsgT>>();
+		std::weak_ptr<Collector<MsgT>> weak = collector;
 		collector->subscription = helper_->create_subscription<MsgT>(
 				topic, qos,
-				[collector](const typename MsgT::ConstSharedPtr msg) {
-					collector->messages.push_back(msg);
+				[weak](const typename MsgT::ConstSharedPtr msg) {
+					if(std::shared_ptr<Collector<MsgT>> collector = weak.lock())
+					{
+						collector->messages.push_back(msg);
+					}
 				});
 		return collector;
 	}

@@ -59,7 +59,7 @@ ComposableNode(
 | Topic | Type | Description |
 |---|---|---|
 | `rgbd_image` | [`rtabmap_msgs/msg/RGBDImage`](https://docs.ros.org/en/jazzy/p/rtabmap_msgs/msg/RGBDImage.html) | The image and its calibration. The depth slot is left empty unless `fill_empty_depth`. Published only when someone is subscribed. |
-| `rgbd_image/compressed` | [`rtabmap_msgs/msg/RGBDImage`](https://docs.ros.org/en/jazzy/p/rtabmap_msgs/msg/RGBDImage.html) | The same frame with the image as JPEG. Published only when someone is subscribed. |
+| `rgbd_image/compressed` | [`rtabmap_msgs/msg/RGBDImage`](https://docs.ros.org/en/jazzy/p/rtabmap_msgs/msg/RGBDImage.html) | The same frame with the image compressed, JPEG by default (see `image_compression_format`). Published only when someone is subscribed. |
 
 The output's `header.frame_id` comes from the camera_info; its `header.stamp` is the image's.
 
@@ -70,12 +70,14 @@ The output's `header.frame_id` comes from the camera_info; its `header.stamp` is
 | `approx_sync` | `bool` | `false` | Match the image and its calibration by nearest stamp. Defaults to **exact**; see [Synchronization](#synchronization). |
 | `approx_sync_max_interval` | `double` | `0.0` | Reject pairs spanning more than this many seconds. `0` disables. |
 | `topic_queue_size` | `int` | `10` | Queue depth of each input subscription. |
+| `output_queue_size` | `int` | `1` | History depth of the `rgbd_image` publishers. |
 | `sync_queue_size` | `int` | `10` | Queue depth of the synchronizer. |
 | `queue_size` | `int` | — | **Deprecated**, renamed to `sync_queue_size`. |
 | `qos` | `int` | `0` | Reliability of the subscription and the publishers: `0` system default, `1` reliable, `2` best effort. |
 | `qos_camera_info` | `int` | value of `qos` | Reliability of the `rgb/camera_info` subscription alone. |
 | `fill_empty_depth` | `bool` | `false` | Add an all-zero depth image the size of the color one. See below. |
 | `compressed_rate` | `double` | `0.0` | Maximum rate, in Hz, of `rgbd_image/compressed`. `0` means every frame. |
+| `image_compression_format` | `string` | `".jpg"` | Format of the image in `rgbd_image/compressed`: `".jpg"` (lossy, smaller) or `".png"` (lossless, larger). An invalid value falls back to `".jpg"` with an error. |
 | `image_transport` | `string` | `"raw"` | Transport for `rgb/image`, e.g. `compressed`. |
 
 ## fill_empty_depth

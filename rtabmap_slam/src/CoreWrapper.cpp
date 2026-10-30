@@ -122,11 +122,13 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 		waitForTransform_(0.2),// 200 ms
 		stalenessFactor_(0.0),
 		useActionForGoal_(false),
+		apriltagTfPrefix_(""), // Default to "[family]:" when empty
 		useSavedMap_(true),
 		genScan_(false),
 		genScanMaxDepth_(4.0),
 		genScanMinDepth_(0.0),
 		genDepth_(false),
+		decodeImagesOnDemand_(true),
 		genDepthDecimation_(1),
 		genDepthFillHolesSize_(0),
 		genDepthFillIterations_(1),
@@ -175,7 +177,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	odomFrameIdInit = this->declare_parameter("odom_frame_id_init", odomFrameIdInit); // set to publish map->odom TF before receiving odom topic
 	mapFrameId_ = this->declare_parameter("map_frame_id", mapFrameId_);
 	groundTruthFrameId_ = this->declare_parameter("ground_truth_frame_id", groundTruthFrameId_);
-	groundTruthBaseFrameId_ = this->declare_parameter("ground_truth_base_frame_id", frameId_);
+	groundTruthBaseFrameId_ = this->declare_parameter("ground_truth_base_frame_id", frameId_+"_gt");
 
 	if(!odomFrameIdInit.empty())
 	{
@@ -222,6 +224,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	genScanMaxDepth_ = this->declare_parameter("gen_scan_max_depth", genScanMaxDepth_);
 	genScanMinDepth_ = this->declare_parameter("gen_scan_min_depth", genScanMinDepth_);
 	genDepth_ = this->declare_parameter("gen_depth", genDepth_);
+	decodeImagesOnDemand_ = this->declare_parameter("decode_images_on_demand", decodeImagesOnDemand_);
 	genDepthDecimation_ = this->declare_parameter("gen_depth_decimation", genDepthDecimation_);
 	genDepthFillHolesSize_ = this->declare_parameter("gen_depth_fill_holes_size", genDepthFillHolesSize_);
 	genDepthFillIterations_ = this->declare_parameter("gen_depth_fill_iterations", genDepthFillIterations_);
@@ -267,6 +270,7 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	}
 
 	RCLCPP_INFO(get_logger(), "rtabmap: gen_depth  = %s", genDepth_?"true":"false");
+	RCLCPP_INFO(get_logger(), "rtabmap: decode_images_on_demand = %s", decodeImagesOnDemand_?"true":"false");
 	if(genDepth_)
 	{
 		RCLCPP_INFO(get_logger(), "rtabmap: gen_depth_decimation        = %d", genDepthDecimation_);
@@ -279,6 +283,10 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 		RCLCPP_INFO(get_logger(), "rtabmap: scan_cloud_max_points = %d", scanCloudMaxPoints_);
 		RCLCPP_INFO(get_logger(), "rtabmap: scan_cloud_is_2d = %s", scanCloudIs2d_?"true":"false");
 	}
+#ifdef WITH_APRILTAG_MSGS
+	apriltagTfPrefix_ = this->declare_parameter("apriltag_tf_prefix", apriltagTfPrefix_);
+	RCLCPP_INFO(this->get_logger(), "rtabmap: apriltag_tf_prefix = %s", apriltagTfPrefix_.c_str());
+#endif
 
 	// Create the processing timer  
 	processingCallbackGroup_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -561,13 +569,17 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 
 	if(parameters_.find(Parameters::kRtabmapDetectionRate()) != parameters_.end())
 	{
-		Parameters::parse(parameters_, Parameters::kRtabmapDetectionRate(), rate_);
-		RCLCPP_INFO(this->get_logger(), "RTAB-Map detection rate = %f Hz", rate_);
+		float rate = rate_;
+		Parameters::parse(parameters_, Parameters::kRtabmapDetectionRate(), rate);
+		rate_ = rate;
+		RCLCPP_INFO(this->get_logger(), "RTAB-Map detection rate = %f Hz", rate);
 	}
 	if(parameters_.find(Parameters::kRtabmapCreateIntermediateNodes()) != parameters_.end())
 	{
-		Parameters::parse(parameters_, Parameters::kRtabmapCreateIntermediateNodes(), createIntermediateNodes_);
-		if(createIntermediateNodes_)
+		bool createIntermediateNodes = createIntermediateNodes_;
+		Parameters::parse(parameters_, Parameters::kRtabmapCreateIntermediateNodes(), createIntermediateNodes);
+		createIntermediateNodes_ = createIntermediateNodes;
+		if(createIntermediateNodes)
 		{
 			RCLCPP_INFO(this->get_logger(), "Create intermediate nodes");
 			if(rate_ == 0.0f)
@@ -607,7 +619,9 @@ CoreWrapper::CoreWrapper(const rclcpp::NodeOptions & options) :
 	}
 	if(parameters_.find(Parameters::kRtabmapImagesAlreadyRectified()) != parameters_.end())
 	{
-		Parameters::parse(parameters_, Parameters::kRtabmapImagesAlreadyRectified(), alreadyRectifiedImages_);
+		bool alreadyRectifiedImages = alreadyRectifiedImages_;
+		Parameters::parse(parameters_, Parameters::kRtabmapImagesAlreadyRectified(), alreadyRectifiedImages);
+		alreadyRectifiedImages_ = alreadyRectifiedImages;
 	}
 	if(parameters_.find(Parameters::kRegForce3DoF()) != parameters_.end())
 	{
@@ -1182,7 +1196,7 @@ bool CoreWrapper::odomUpdate(const nav_msgs::msg::Odometry & odomMsg, rclcpp::Ti
 				stamp.seconds(),
 				previousStamp_.seconds(),
 				Parameters::kRtabmapDetectionRate().c_str(),
-				rate_,
+				rate_.load(),
 				1.0f/rate_,
 				stalenessFactor_,
 				stalenessFactor_/rate_);
@@ -1292,7 +1306,7 @@ bool CoreWrapper::odomTFUpdate(const std::string & odomFrameId, const rclcpp::Ti
 				stamp.seconds(),
 				previousStamp_.seconds(),
 				Parameters::kRtabmapDetectionRate().c_str(),
-				rate_,
+				rate_.load(),
 				1.0f/rate_,
 				stalenessFactor_,
 				stalenessFactor_/rate_);
@@ -1349,6 +1363,29 @@ void CoreWrapper::commonMultiCameraCallback(
 		const std::vector<std::vector<rtabmap_msgs::msg::KeyPoint> > & localKeyPoints,
 		const std::vector<std::vector<rtabmap_msgs::msg::Point3f> > & localPoints3d,
 		const std::vector<cv::Mat> & localDescriptors)
+{
+	commonMultiCameraCallbackWithCompressed(odomMsg, userDataMsg, imageMsgs, depthMsgs,
+			cameraInfoMsgs, depthCameraInfoMsgs, scan2dMsg, scan3dMsg, odomInfoMsg,
+			globalDescriptorMsgs, localKeyPoints, localPoints3d, localDescriptors,
+			std::vector<cv::Mat>(), std::vector<cv::Mat>());
+}
+
+void CoreWrapper::commonMultiCameraCallbackWithCompressed(
+		const nav_msgs::msg::Odometry::ConstSharedPtr & odomMsg,
+		const rtabmap_msgs::msg::UserData::ConstSharedPtr & userDataMsg,
+		const std::vector<cv_bridge::CvImageConstPtr> & imageMsgs,
+		const std::vector<cv_bridge::CvImageConstPtr> & depthMsgs,
+		const std::vector<sensor_msgs::msg::CameraInfo> & cameraInfoMsgs,
+		const std::vector<sensor_msgs::msg::CameraInfo> & depthCameraInfoMsgs,
+		const sensor_msgs::msg::LaserScan & scan2dMsg,
+		const sensor_msgs::msg::PointCloud2 & scan3dMsg,
+		const rtabmap_msgs::msg::OdomInfo::ConstSharedPtr& odomInfoMsg,
+		const std::vector<rtabmap_msgs::msg::GlobalDescriptor> & globalDescriptorMsgs,
+		const std::vector<std::vector<rtabmap_msgs::msg::KeyPoint> > & localKeyPoints,
+		const std::vector<std::vector<rtabmap_msgs::msg::Point3f> > & localPoints3d,
+		const std::vector<cv::Mat> & localDescriptors,
+		const std::vector<cv::Mat> & compressedImages,
+		const std::vector<cv::Mat> & compressedDepths)
 {
 	std::string odomFrameId;
 	if(odomMsg.get())
@@ -1419,7 +1456,9 @@ void CoreWrapper::commonMultiCameraCallback(
 				globalDescriptorMsgs,
 				localKeyPoints,
 				localPoints3d,
-				localDescriptors);
+				localDescriptors,
+				compressedImages,
+				compressedDepths);
 		
 		if(syncData_.valid) {
 			syncTimer_->reset();
@@ -1440,7 +1479,9 @@ void CoreWrapper::commonMultiCameraCallbackImpl(
 		const std::vector<rtabmap_msgs::msg::GlobalDescriptor> & globalDescriptorMsgs,
 		const std::vector<std::vector<rtabmap_msgs::msg::KeyPoint> > & localKeyPointsMsgs,
 		const std::vector<std::vector<rtabmap_msgs::msg::Point3f> > & localPoints3dMsgs,
-		const std::vector<cv::Mat> & localDescriptorsMsgs)
+		const std::vector<cv::Mat> & localDescriptorsMsgs,
+		const std::vector<cv::Mat> & compressedImages,
+		const std::vector<cv::Mat> & compressedDepths)
 {
 	UTimer timerConversion;
 	cv::Mat rgb;
@@ -1695,6 +1736,43 @@ void CoreWrapper::commonMultiCameraCallbackImpl(
 				lastPoseIntermediate_?-1:0,
 				rtabmap_conversions::timestampFromROS(lastPoseStamp_),
 				userData);
+	}
+
+	// Keep the compressed images the images come from, so that rtabmap stores them as is
+	// instead of compressing them again (see Memory). Only for a single camera, and only if
+	// the images were not changed on the way (color conversion, generated depth).
+	if(imageMsgs.empty() && depthMsgs.empty() && compressedImages.size() == 1 && compressedDepths.size() == 1)
+	{
+		// Not decoded (see imagesDecodedOnDemand()): rtabmap decodes them if it needs to
+		if(!stereoCameraModels.empty())
+		{
+			syncData_.data.setStereoImage(compressedImages[0], compressedDepths[0], stereoCameraModels, false);
+		}
+		else
+		{
+			syncData_.data.setRGBDImage(compressedImages[0], compressedDepths[0], cameraModels, false);
+		}
+	}
+	else if(imageMsgs.size() == 1 && compressedImages.size() == 1 && compressedDepths.size() == 1)
+	{
+		const bool sameImage = !compressedImages[0].empty() && imageMsgs[0].get() &&
+				rgb.type() == imageMsgs[0]->image.type() && rgb.size() == imageMsgs[0]->image.size();
+		const bool sameDepth = !compressedDepths[0].empty() && !genDepth_ &&
+				depthMsgs.size() == 1 && depthMsgs[0].get() &&
+				depth.type() == depthMsgs[0]->image.type() && depth.size() == depthMsgs[0]->image.size();
+		if(sameImage || sameDepth)
+		{
+			const cv::Mat compressedImage = sameImage ? compressedImages[0] : cv::Mat();
+			const cv::Mat compressedDepth = sameDepth ? compressedDepths[0] : cv::Mat();
+			if(!stereoCameraModels.empty())
+			{
+				syncData_.data.setStereoImage(compressedImage, compressedDepth, stereoCameraModels, false);
+			}
+			else
+			{
+				syncData_.data.setRGBDImage(compressedImage, compressedDepth, cameraModels, false);
+			}
+		}
 	}
 
 	OdometryInfo odomInfo;
@@ -2132,9 +2210,14 @@ void CoreWrapper::process(
 
 					SensorData interData(cv::Mat(), cv::Mat(), rtabmap::CameraModel(), -1, rtabmap_conversions::timestampFromROS(iter->first.header.stamp));
 					Transform gt;
-					if(!groundTruthFrameId_.empty())
+					if(!groundTruthFrameId_.empty() && !groundTruthBaseFrameId_.empty())
 					{
-						gt = rtabmap_conversions::getTransform(groundTruthFrameId_, groundTruthBaseFrameId_, iter->first.header.stamp, *tfBuffer_, waitForTransform_);
+						// Without waiting: processed only when the next node with data
+						// arrives, an intermediate node's stamp is in the past, so its
+						// ground truth is either in the TF buffer already or will not be.
+						// Waiting for each of them would delay rtabmap (and then even more
+						// of them would be too old for the buffer).
+						gt = rtabmap_conversions::getTransform(groundTruthFrameId_, groundTruthBaseFrameId_, iter->first.header.stamp, *tfBuffer_, 0.0);
 					}
 					interData.setGroundTruth(gt);
 
@@ -2186,7 +2269,7 @@ void CoreWrapper::process(
 
 		//Add async stuff
 		Transform groundTruthPose;
-		if(!groundTruthFrameId_.empty())
+		if(!groundTruthFrameId_.empty() && !groundTruthBaseFrameId_.empty())
 		{
 			groundTruthPose = rtabmap_conversions::getTransform(groundTruthFrameId_, groundTruthBaseFrameId_, stamp, *tfBuffer_, waitForTransform_);
 		}
@@ -2309,12 +2392,14 @@ void CoreWrapper::process(
 			Transform t = Transform::getTransform(imus_, data.stamp());
 			if(!t.isNull())
 			{
+				// copy under lock, imuAsyncCallback() can modify it concurrently
+				std::string imuFrameId = imuFrameId_;
 				imuMutex_.unlock();
 				// get local transform
 				rtabmap::Transform localTransform;
-				if(frameId_.compare(imuFrameId_) != 0)
+				if(frameId_.compare(imuFrameId) != 0)
 				{
-					localTransform = rtabmap_conversions::getTransform(frameId_, imuFrameId_, rtabmap_conversions::timestampToROS(data.stamp()), *tfBuffer_, waitForTransform_);
+					localTransform = rtabmap_conversions::getTransform(frameId_, imuFrameId, rtabmap_conversions::timestampToROS(data.stamp()), *tfBuffer_, waitForTransform_);
 				}
 				else
 				{
@@ -2611,7 +2696,7 @@ void CoreWrapper::process(
 			if(data.id() >= 0)
 			{
 				localizationDiagnostic_.updateStatus(rtabmap_.getStatistics().localizationCovariance(), twoDMapping_);
-				tick(stamp, rate_>0?rate_:1000.0/(timeMsgConversion+timeRtabmap+timeUpdateMaps+timePublishMaps));
+				tick(stamp, rate_>0?rate_.load():1000.0/(timeMsgConversion+timeRtabmap+timeUpdateMaps+timePublishMaps));
 			}
 		}
 		else
@@ -2688,7 +2773,7 @@ void CoreWrapper::userDataAsyncCallback(const rtabmap_msgs::msg::UserData::Share
 					"data input topic rate is higher than "
 					"map update rate (current %s=%f), only latest data is saved "
 					"in the next node created. This message will is shown only once.",
-					Parameters::kRtabmapDetectionRate().c_str(), rate_);
+					Parameters::kRtabmapDetectionRate().c_str(), rate_.load());
 			warningShow = true;
 		}
 		userData_ = rtabmap_conversions::userDataFromROS(*dataMsg);
@@ -2801,10 +2886,10 @@ void CoreWrapper::apriltagAsyncCallback(const apriltag_msgs::msg::AprilTagDetect
 		UScopeMutex lock(landmarksMutex_);
 		for(unsigned int i=0; i<msg->detections.size(); ++i)
 		{
-			std::string tagFrameId = msg->detections[i].family+":"+uNumber2Str(msg->detections[i].id);
+			std::string tagFrameId = (apriltagTfPrefix_.empty()?msg->detections[i].family+":":apriltagTfPrefix_)+uNumber2Str(msg->detections[i].id);
 			Transform camToTag = rtabmap_conversions::getTransform(
 				msg->header.frame_id, // e.g., camera_optical_frame
-				tagFrameId,                     // e.g., tag36h11:42
+				tagFrameId,           // e.g., tag36h11:42
 				msg->header.stamp,
 				*tfBuffer_,
 				waitForTransform_);
@@ -2960,7 +3045,7 @@ void CoreWrapper::imuAsyncCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
 				imus_.clear();
 				imuFrameId_.clear();
 			}
-			else
+			else if(imuFrameId_.empty())
 			{
 				imuFrameId_ = msg->header.frame_id;
 			}
@@ -3247,7 +3332,7 @@ void CoreWrapper::applyParameters()
 	if(parameters_.find(Parameters::kRtabmapDetectionRate()) != parameters_.end())
 	{
 		rate_ = uStr2Float(parameters_.at(Parameters::kRtabmapDetectionRate()));
-		RCLCPP_INFO(get_logger(), "RTAB-Map rate detection = %f Hz", rate_);
+		RCLCPP_INFO(get_logger(), "RTAB-Map rate detection = %f Hz", rate_.load());
 	}
 	if(parameters_.find(Parameters::kRtabmapCreateIntermediateNodes()) != parameters_.end())
 	{

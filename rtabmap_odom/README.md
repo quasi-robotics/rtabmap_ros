@@ -19,6 +19,7 @@ SLAM needs a pose for every measurement it maps. These nodes produce one by regi
 - [Services](#services)
 - [Published topics](#published-topics)
   - [Outputting filtered scans and features](#outputting-filtered-scans-and-features)
+  - [Compressed sensor data](#compressed-sensor-data)
 - [Diagnostics](#diagnostics)
 - [License](#license)
 
@@ -78,7 +79,7 @@ These apply to all three nodes.
 | `wait_for_transform` | `double` | `0.1` | Seconds to wait for a needed transform before giving up on the frame. |
 | `initial_pose` | `string` | `""` | Starting pose, `"x y z roll pitch yaw"`. Also settable at runtime through `reset_odom_to_pose`. |
 | `ground_truth_frame_id` | `string` | `""` | When set, the pose is taken from this TF instead of being computed — for replaying a dataset with a known trajectory. |
-| `ground_truth_base_frame_id` | `string` | value of `frame_id` | The robot frame within the ground truth TF tree. |
+| `ground_truth_base_frame_id` | `string` | value of `frame_id` + `"_gt"` | The robot frame within the ground truth TF tree. Empty: the ground truth is not used. |
 | `guess_frame_id` | `string` | `""` | A frame carrying another odometry source, used as the initial guess for each registration. Documented with its companions under [Feeding in an external guess](#feeding-in-an-external-guess) -- **the highest-value parameter here for a wheeled robot**. |
 
 The sensor must be connected to `frame_id` in TF **before the first frame arrives**, or that frame is dropped with a warning. A static publisher is the usual answer.
@@ -171,7 +172,7 @@ After an automatic reset the countdown is left armed, so if odometry still canno
 | `wait_imu_to_init` | `bool` | `false` | Hold off until an IMU message has arrived, so gravity is known from the first frame. |
 | `imu_queue_size` | `int` | `200` | Depth of the IMU buffer. IMUs run far faster than cameras; this is why it is large. |
 | `qos_imu` | `int` | value of `qos` | Reliability of the `imu` subscription. |
-| `always_check_imu_tf` | `bool` | `false` | Re-read the IMU-to-robot transform every message rather than caching it. |
+| `always_check_imu_tf` | `bool` | `true` | Look the IMU-to-robot transform up at every message's stamp rather than once, for an IMU on a moving mount. A message then waits until TF covers its stamp (dropped if it still doesn't 0.5 s later), rather than using an older transform. Set it to `false` for an IMU fixed on the robot: the transform is then read once and adds no delay. |
 
 The `imu` topic is optional on all three nodes. Supplying it lets odometry know which way is down, which constrains roll and pitch — worth doing on any robot that has an IMU, and close to mandatory for a handheld or aerial one.
 
@@ -187,6 +188,7 @@ Registration runs on its own thread, so a slow frame does not block the subscrip
 | `expected_update_rate` | `double` | `0.0` | The rate frames are expected at, in Hz. Used only when `max_update_rate` is unset, and it is a **ceiling**: a frame arriving sooner than `1/expected_update_rate` after the last one is skipped, with a warning that the input is faster than expected. `0` disables. |
 | `max_update_rate` | `double` | `0.0` | Throttle registration to at most this rate, skipping frames silently. Takes precedence over `expected_update_rate`. `0` disables. |
 | `min_update_rate` | `double` | `0.0` | Treat odometry as **lost and reset it** when more than `1/min_update_rate` passes between updates — the motion assumption no longer holds across a gap that long. `0` disables. |
+| `output_queue_size` | `int` | `1` | History depth of the `odom`, `odom_info` and `odom_info_lite` publishers. Even with a reliable `qos`, a message a subscriber has not acknowledged yet is lost when the next one replaces it: raise it when every pose must arrive, e.g., when `rtabmap` saves them all as intermediate nodes (`Rtabmap/CreateIntermediateNodes`) and may be busy. |
 
 **`always_process_most_recent_frame` already bounds the delay.** A frame arriving while registration is still running is dropped on the spot rather than queued, so the worker always picks up the newest frame and the published pose is at most one registration behind the sensor. No backlog ever forms. `/diagnostics` reports how many frames went this way.
 
@@ -254,7 +256,7 @@ Common to all three nodes. **Every one of them, `odom` included, is published on
 | `odom_local_scan_map` | [`sensor_msgs/msg/PointCloud2`](https://docs.ros.org/en/jazzy/p/sensor_msgs/msg/PointCloud2.html) | The scan map, the ICP path's equivalent of `odom_local_map`. |
 | `odom_last_frame` | [`sensor_msgs/msg/PointCloud2`](https://docs.ros.org/en/jazzy/p/sensor_msgs/msg/PointCloud2.html) | The current frame's **features**, in the odom frame — not its scan or its pixels. Visual paths only, for the same reason as `odom_local_map`; for the filtered scan see `odom_sensor_data/*`. |
 | `odom_rgbd_image` | [`rtabmap_msgs/msg/RGBDImage`](https://docs.ros.org/en/jazzy/p/rtabmap_msgs/msg/RGBDImage.html) | The frame **as odometry processed it**, not the input as it arrived. See [Outputting filtered scans and features](#outputting-filtered-scans-and-features). |
-| `odom_sensor_data/raw`, `/features`, `/compressed` | [`rtabmap_msgs/msg/SensorData`](https://docs.ros.org/en/jazzy/p/rtabmap_msgs/msg/SensorData.html) | The same frame as `SensorData`. `/features` strips the images and scan and keeps only the extracted features; `/compressed` carries JPEG/PNG images instead of raw. |
+| `odom_sensor_data/raw`, `/features`, `/compressed` | [`rtabmap_msgs/msg/SensorData`](https://docs.ros.org/en/jazzy/p/rtabmap_msgs/msg/SensorData.html) | The same frame as `SensorData`. `/features` strips the images and scan and keeps only the extracted features; `/compressed` carries compressed images instead of raw, see [Compressed sensor data](#compressed-sensor-data). |
 
 ### Outputting filtered scans and features
 
@@ -263,6 +265,18 @@ Common to all three nodes. **Every one of them, `odom` included, is published on
 - **Features are included.** Registration writes the keypoints, their 3D positions and their descriptors back into the frame, so these topics carry them. `odom_sensor_data/features` is that alone, with the images and scan removed.
 - **The scan is the filtered one.** `icp_odometry` builds the frame after deskewing, voxelization, range filtering and normal estimation, so what comes out here is the decimated cloud ICP saw — not the raw sweep the lidar published. Subscribe to the driver's topic if you want the original.
 - **Images are converted.** `rgbd_odometry` hands over grayscale unless `keep_color` is set, so that is what these carry too.
+
+### Compressed sensor data
+
+`odom_sensor_data/compressed` carries the frame with its images and scan compressed, for a slow link. It is only built when something subscribes to it.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `sensor_data_compression_format` | `string` | `".jpg"` | Format of the color image, and of the right image of a stereo pair: `".jpg"` or `".png"`. |
+| `sensor_data_depth_compression_format` | `string` | `".rvl"` | Format of the depth image: `".rvl"` (lossless, faster) or `".png"` (lossless, smaller), optionally followed by `":<maxDepth>[:<quantization>]"` (e.g. `".rvl:10:100"`) to compress 32FC1 depth as 16 bits inverse depth, as `Mem/DepthCompressionFormat`. That is lossy -- depth over `maxDepth` is lost and the error grows with the square of the depth (~0.05 mm at 1 m and 5 mm at 10 m with a quantization of 100) -- but much smaller than the lossless 32FC1 PNG. 16UC1 depth is always lossless. An invalid value falls back to `".rvl"` with an error. |
+| `sensor_data_parallel_compression` | `bool` | `true` | Compress the images and the scan in parallel threads. |
+
+The depth is in rtabmap's format (`rtabmap::uncompressImage()` reads it), not in `compressed_depth_image_transport`'s; `rtabmap_conversions::rtabmapToCompressedDepthTransport()` converts it without decompressing it.
 
 ## Diagnostics
 

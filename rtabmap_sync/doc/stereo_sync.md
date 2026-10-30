@@ -92,7 +92,7 @@ As with `rgbd_sync`, compose it into the driver's process where you can: this no
 | Topic | Type | Description |
 |---|---|---|
 | `rgbd_image` | [`rtabmap_msgs/msg/RGBDImage`](https://docs.ros.org/en/jazzy/p/rtabmap_msgs/msg/RGBDImage.html) | Left image in the color slot, right image in the depth slot. Published only when someone is subscribed. |
-| `rgbd_image/compressed` | [`rtabmap_msgs/msg/RGBDImage`](https://docs.ros.org/en/jazzy/p/rtabmap_msgs/msg/RGBDImage.html) | The same pair, both images JPEG. Published only when someone is subscribed. |
+| `rgbd_image/compressed` | [`rtabmap_msgs/msg/RGBDImage`](https://docs.ros.org/en/jazzy/p/rtabmap_msgs/msg/RGBDImage.html) | The same pair, both images compressed, JPEG by default (see `image_compression_format`). Published only when someone is subscribed. |
 
 The output's `header.frame_id` comes from the **left** camera_info, and its `header.stamp` is the later of the two image stamps.
 
@@ -103,12 +103,15 @@ The output's `header.frame_id` comes from the **left** camera_info, and its `hea
 | `approx_sync` | `bool` | `false` | Match the inputs by nearest stamp. Defaults to **exact** here; see [Synchronization](#synchronization). |
 | `approx_sync_max_interval` | `double` | `0.0` | Reject sets spanning more than this many seconds. `0` disables. Only meaningful with `approx_sync`. |
 | `topic_queue_size` | `int` | `10` | Queue depth of each input subscription. |
+| `output_queue_size` | `int` | `1` | History depth of the `rgbd_image` publishers. |
 | `sync_queue_size` | `int` | `10` | Queue depth of the synchronizer. |
 | `queue_size` | `int` | — | **Deprecated**, renamed to `sync_queue_size`. |
 | `qos` | `int` | `0` | Reliability of the subscriptions and the publishers: `0` system default, `1` reliable, `2` best effort. |
 | `qos_camera_info` | `int` | value of `qos` | Reliability of the two `camera_info` subscriptions alone. |
 | `compressed_rate` | `double` | `0.0` | Maximum rate, in Hz, of `rgbd_image/compressed`. `0` means every frame. |
+| `image_compression_format` | `string` | `".jpg"` | Format of the left and right images in `rgbd_image/compressed`: `".jpg"` (lossy, smaller) or `".png"` (lossless, larger). An invalid value falls back to `".jpg"` with an error. |
 | `image_transport` | `string` | `"raw"` | Transport for both images, e.g. `compressed`. |
+| `stereo_exposure_compensation` | `bool` | `false` | Equalize the exposure of the left and right images (gain compensation) before publishing them. The stereo correspondences computed downstream assume the same brightness in both images: set it when the two cameras expose differently. |
 
 ## How a stereo pair travels in an RGBDImage
 
@@ -135,9 +138,9 @@ ros2 topic echo --once /stereo/right/image_rect --field header.stamp
 
 ## Compressing for a slow link
 
-`rgbd_image/compressed` carries both images as **JPEG**. Unlike [rgbd_sync](rgbd_sync.md), there is no lossless path: both halves of a stereo pair are ordinary camera images, and neither is depth.
+`rgbd_image/compressed` carries both images as **JPEG** by default: both halves of a stereo pair are ordinary camera images, and neither is depth.
 
-JPEG artifacts do affect stereo matching, so a pipeline that computes odometry from the compressed stream will match slightly fewer features than one on the raw images. For sending frames to an operator, that does not matter; for running odometry at the far end of a link, prefer a higher JPEG quality over a lower frame rate.
+JPEG artifacts do affect stereo matching, so a pipeline that computes odometry from the compressed stream will match slightly fewer features than one on the raw images. For sending frames to an operator, that does not matter; for running odometry at the far end of a link, set `image_compression_format: ".png"` to keep both images lossless, at a few times the size, and lower `compressed_rate` if the link cannot carry it.
 
 `compressed_rate` caps the compressed topic without touching `rgbd_image`.
 
