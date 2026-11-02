@@ -5,8 +5,10 @@ All rights reserved. (BSD-3-Clause, see the repository root.)
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
+#include <thread>
 
 #include <tf2_msgs/msg/tf_message.hpp>
 #include <tf2_ros/static_transform_broadcaster.hpp>
@@ -296,6 +298,46 @@ TEST_F(OdometryRosTest, registers_the_newest_frame_that_arrived_while_registerin
 				<< "the last frame of burst " << b << " was not registered (" << odom->size() << " poses)";
 	}
 	EXPECT_LE(odom->size(), frame) << "more poses than frames";
+}
+
+/// With policy 2, a frame becomes pending whenever it cannot take the data mutex, so the
+/// mutex must never be released with a pending frame left behind: the next frame would
+/// find it free and abort on the assertion that nothing is pending. Frames are handed to
+/// the node straight from several threads, empty to keep each registration short, so
+/// that the mutex changes hands as often as possible.
+TEST_F(OdometryRosTest, never_leaves_a_frame_pending_when_frames_arrive_concurrently)
+{
+	std::shared_ptr<rtabmap_odom::ICPOdometry> node = makeNode({rclcpp::Parameter("frame_policy", 2)});
+
+	std::atomic<int> stamp(0);
+	std::atomic<bool> failed(false);
+	std::vector<std::thread> threads;
+	for(int t=0; t<4; ++t)
+	{
+		threads.emplace_back([&]() {
+			for(int i=0; i<200000 && !failed; ++i)
+			{
+				std_msgs::msg::Header header;
+				header.frame_id = "lidar";
+				header.stamp = rclcpp::Time(1, 0) + rclcpp::Duration::from_nanoseconds(int64_t(++stamp)*1000);
+				rtabmap::SensorData data;
+				try
+				{
+					node->processData(data, header);
+				}
+				catch(const std::exception & e)
+				{
+					ADD_FAILURE() << e.what();
+					failed = true;
+				}
+			}
+		});
+	}
+	for(std::thread & thread : threads)
+	{
+		thread.join();
+	}
+	EXPECT_FALSE(failed);
 }
 
 /// With policy 0, the same burst is registered whole, one pose per frame.

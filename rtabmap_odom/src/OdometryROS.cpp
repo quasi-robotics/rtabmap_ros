@@ -700,6 +700,9 @@ void OdometryROS::callbackIMU(const sensor_msgs::msg::Imu::SharedPtr msg)
 				newestImuStamp = imus_.rbegin()->first;
 			}
 		}
+		// pendingMutex_ first, as in processData(data, header): a frame cannot become pending
+		// while dataMutex_ is held here, as nothing would hand it over after.
+		UScopeMutex pendingLock(pendingMutex_);
 		UScopeMutex dataLock(dataMutex_, false);
 		if(dataLock.lockTry() == 0)
 		{
@@ -801,7 +804,9 @@ void OdometryROS::processData()
 	processDataLocked();
 
 	// frame_policy 2: the newest frame that arrived while registering, next. Handed over
-	// before dataMutex_ is released, so that a newer frame cannot get it first.
+	// before dataMutex_ is released, so that a newer frame cannot get it first, and
+	// dataMutex_ released with pendingMutex_ still held, so that no frame can become
+	// pending after this check.
 	UScopeMutex pendingLock(pendingMutex_);
 	if(hasPendingData_)
 	{
@@ -818,6 +823,7 @@ void OdometryROS::processData()
 		++processedMsgs_;
 		dataReady_.release();
 	}
+	lock.unlock();
 }
 
 void OdometryROS::processDataLocked()
@@ -1707,11 +1713,6 @@ void OdometryROS::reset(const Transform & pose)
 	dataToProcess_ = SensorData();
 	dataHeaderToProcess_ = std_msgs::msg::Header();
 	bufferedDataToProcess_ = false;
-	pendingMutex_.lock();
-	pendingData_ = SensorData();
-	pendingHeader_ = std_msgs::msg::Header();
-	hasPendingData_ = false;
-	pendingMutex_.unlock();
 	imuMutex_.lock();
 	imus_.clear();
 	imusPending_.clear();
@@ -1722,6 +1723,14 @@ void OdometryROS::reset(const Transform & pose)
 	imuMotionPredictor_.reset();
 	imuMotionPredictorMutex_.unlock();
 	this->flushCallbacks();
+
+	// Cleared last, and dataMutex_ released with pendingMutex_ held: a frame arriving
+	// during the reset would otherwise become pending with nothing to hand it over.
+	UScopeMutex pendingLock(pendingMutex_);
+	pendingData_ = SensorData();
+	pendingHeader_ = std_msgs::msg::Header();
+	hasPendingData_ = false;
+	lock.unlock();
 }
 
 void OdometryROS::pause(
