@@ -377,8 +377,8 @@ void RGBDOdometry::onOdomInit()
 #else
 		image_transport::TransportHints rgb_hints(*this); // using "image_transport" parameter
 		image_transport::TransportHints depth_hints(*this, "raw", "depth_transport");
-		image_mono_sub_.subscribe(*this, rgbTopic, rgb_hints.getTransport(), rclcpp::QoS(topicQueueSize_).reliability((rmw_qos_reliability_policy_t)qos()), options);
-		image_depth_sub_.subscribe(*this, depthTopic, depth_hints.getTransport(), rclcpp::QoS(topicQueueSize_).reliability((rmw_qos_reliability_policy_t)qos()), options);
+		image_mono_sub_.subscribe(*this, rgbTopic, rgb_hints.getTransport(), rclcpp::QoS(topicQueueSize_).reliability((rmw_qos_reliability_policy_t)qosCam), options);
+		image_depth_sub_.subscribe(*this, depthTopic, depth_hints.getTransport(), rclcpp::QoS(topicQueueSize_).reliability((rmw_qos_reliability_policy_t)qosCam), options);
 #endif
 		info_sub_.subscribe(this, "rgb/camera_info", RCLCPP_QOS(topicQueueSize_, qosCamInfo), options);
 
